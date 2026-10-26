@@ -1,0 +1,35 @@
+# All Modbus TCP and HTTP ports are published on every host interface
+# (0.0.0.0), so other machines on the network can reach them.
+services:
+  sensor:
+    build: .
+    command: python sensor/sensor.py
+    environment:
+      SENSOR_PORT: "5020"
+    ports:
+      - "0.0.0.0:${SENSOR_PUBLIC_PORT:-5020}:5020"
+    restart: unless-stopped
+
+  plc:
+    build: .
+    command: python plc/plc.py
+    environment:
+      PLC_PORT: "5021"
+      SENSOR_ADDR: sensor
+      SENSOR_PORT: "5020"
+    ports:
+      # 502 is the standard Modbus TCP port, so external tools work with defaults.
+      - "0.0.0.0:${PLC_PUBLIC_PORT:-502}:5021"
+    depends_on: [sensor]
+    restart: unless-stopped
+
+  hmi:
+    build: .
+    command: uvicorn app:app --app-dir hmi --host 0.0.0.0 --port 8080
+    environment:
+      PLC_ADDR: plc
+      PLC_PORT: "5021"
+    ports:
+      - "0.0.0.0:${HMI_PUBLIC_PORT:-8080}:8080"
+    depends_on: [plc]
+    restart: unless-stopped

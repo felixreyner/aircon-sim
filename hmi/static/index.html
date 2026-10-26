@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AirCon HMI</title>
+<style>
+  :root {
+    --bg: #11151a; --panel: #1a2027; --line: #2b333d; --text: #e3e8ee; --muted: #8b97a5;
+    --accent: #3fa7f5; --ok: #3ccf7a; --warn: #f5b13f; --bad: #f2555a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.4 system-ui, -apple-system, Segoe UI, sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between;
+           padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 18px; margin: 0; }
+  #link { font-size: 12px; color: var(--muted); }
+  main { display: grid; gap: 16px; padding: 16px; max-width: 1200px; margin: 0 auto;
+         grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+  .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+              color: var(--muted); margin: 0 0 12px; }
+  .big { display: flex; gap: 24px; }
+  .big div span { display: block; font-size: 40px; font-variant-numeric: tabular-nums; }
+  .big small { color: var(--muted); }
+  .leds { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+  .led { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .led i { width: 12px; height: 12px; border-radius: 50%; background: #39424d; }
+  .led.on i { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .led.alarm.on i { background: var(--bad); box-shadow: 0 0 8px var(--bad); }
+  .row { display: flex; align-items: center; justify-content: space-between;
+         padding: 8px 0; border-bottom: 1px solid var(--line); gap: 8px; }
+  .row:last-child { border-bottom: 0; }
+  button { background: #26303a; color: var(--text); border: 1px solid var(--line);
+           border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit; }
+  button:hover { border-color: var(--accent); }
+  button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .stepper { display: flex; align-items: center; gap: 8px; }
+  .stepper output { min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
+  canvas { width: 100%; height: 200px; display: block; }
+  .legend { display: flex; gap: 16px; color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .legend b { display: inline-block; width: 10px; height: 3px; vertical-align: middle; margin-right: 4px; }
+  .wide { grid-column: 1 / -1; }
+  table { width: 100%; border-collapse: collapse; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+  th, td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: normal; }
+  td.w { color: var(--warn); }
+  .scroll { max-height: 260px; overflow: auto; }
+  #error { color: var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>AirCon Controller HMI</h1>
+  <span id="link">connecting…</span>
+</header>
+<main>
+  <section class="panel">
+    <h2>Room</h2>
+    <div class="big">
+      <div><span id="temp">--</span><small>Temperature °C</small></div>
+      <div><span id="hum">--</span><small>Humidity %RH</small></div>
+    </div>
+    <div class="leds">
+      <div class="led" id="led-power"><i></i>Power</div>
+      <div class="led" id="led-comp"><i></i>Compressor <span id="cooling"></span></div>
+      <div class="led alarm" id="led-alarm"><i></i>High temp</div>
+      <div class="led alarm" id="led-fault"><i></i>Sensor fault</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Controls</h2>
+    <div class="row"><span>Power</span>
+      <div><button data-tag="power" data-value="1">On</button>
+           <button data-tag="power" data-value="0">Off</button></div></div>
+    <div class="row"><span>Mode</span>
+      <div><button data-tag="mode" data-value="0">Cool</button>
+           <button data-tag="mode" data-value="1">Fan only</button></div></div>
+    <div class="row"><span>Fan speed</span>
+      <div><button data-tag="fan" data-value="1">1</button>
+           <button data-tag="fan" data-value="2">2</button>
+           <button data-tag="fan" data-value="3">3</button></div></div>
+    <div class="row"><span>Setpoint °C</span>
+      <div class="stepper"><button data-step="setpoint" data-delta="-0.5">−</button>
+        <output id="setpoint">--</output>
+        <button data-step="setpoint" data-delta="0.5">+</button></div></div>
+    <div class="row"><span>Alarm limit °C</span>
+      <div class="stepper"><button data-step="alarm_limit" data-delta="-1">−</button>
+        <output id="alarm_limit">--</output>
+        <button data-step="alarm_limit" data-delta="1">+</button></div></div>
+    <div id="error"></div>
+  </section>
+
+  <section class="panel wide">
+    <h2>Trend (last 5 minutes)</h2>
+    <canvas id="trend"></canvas>
+    <div class="legend"><span><b style="background:#3fa7f5"></b>Temperature</span>
+      <span><b style="background:#f5b13f"></b>Setpoint</span>
+      <span><b style="background:#3ccf7a"></b>Cooling % (right axis)</span></div>
+  </section>
+
+  <section class="panel wide">
+    <h2>Modbus traffic (HMI ↔ PLC)</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>#</th><th>Time</th><th>FC</th><th>Function</th><th>Address</th><th>Count</th><th>Values</th></tr></thead>
+      <tbody id="traffic"></tbody>
+    </table></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const history = [];
+let state = null;
+
+async function write(tag, value) {
+  const r = await fetch('/api/write', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                       body: JSON.stringify({tag, value})});
+  $('error').textContent = r.ok ? '' : (await r.json()).detail;
+  refresh();
+}
+
+document.querySelectorAll('button[data-tag]').forEach(b =>
+  b.onclick = () => write(b.dataset.tag, Number(b.dataset.value)));
+document.querySelectorAll('button[data-step]').forEach(b =>
+  b.onclick = () => state && write(b.dataset.step, state[b.dataset.step] + Number(b.dataset.delta)));
+
+function render(s) {
+  $('temp').textContent = s.temperature.toFixed(1);
+  $('hum').textContent = s.humidity.toFixed(1);
+  $('setpoint').textContent = s.setpoint.toFixed(1);
+  $('alarm_limit').textContent = s.alarm_limit.toFixed(0);
+  $('cooling').textContent = s.compressor ? `(${s.cooling}%)` : '';
+  $('led-power').classList.toggle('on', s.power);
+  $('led-comp').classList.toggle('on', s.compressor);
+  $('led-alarm').classList.toggle('on', s.alarm);
+  $('led-fault').classList.toggle('on', s.sensor_fault);
+  const current = {power: +s.power, mode: s.mode, fan: s.fan};
+  document.querySelectorAll('button[data-tag]').forEach(b =>
+    b.classList.toggle('active', current[b.dataset.tag] === Number(b.dataset.value)));
+  $('link').textContent = `PLC online · scan ${s.scans}`;
+}
+
+function drawTrend() {
+  const c = $('trend'), dpr = window.devicePixelRatio || 1;
+  c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
+  const g = c.getContext('2d'); g.scale(dpr, dpr);
+  const w = c.clientWidth, h = c.clientHeight, pad = 32;
+  g.clearRect(0, 0, w, h);
+  if (history.length < 2) return;
+  const temps = history.flatMap(p => [p.temperature, p.setpoint]);
+  const lo = Math.floor(Math.min(...temps) - 1), hi = Math.ceil(Math.max(...temps) + 1);
+  const x = i => pad + (w - 2 * pad) * i / (history.length - 1);
+  const y = v => h - 20 - (h - 30) * (v - lo) / (hi - lo);
+  const yc = v => h - 20 - (h - 30) * v / 100;
+  g.strokeStyle = '#2b333d'; g.fillStyle = '#8b97a5'; g.font = '11px system-ui'; g.lineWidth = 1;
+  for (let v = lo; v <= hi; v += Math.max(1, Math.round((hi - lo) / 5))) {
+    g.beginPath(); g.moveTo(pad, y(v)); g.lineTo(w - pad, y(v)); g.stroke();
+    g.fillText(v, 4, y(v) + 4);
+  }
+  [0, 50, 100].forEach(v => g.fillText(v, w - pad + 6, yc(v) + 4));
+  const line = (get, color, scale) => {
+    g.strokeStyle = color; g.lineWidth = 2; g.beginPath();
+    history.forEach((p, i) => i ? g.lineTo(x(i), scale(get(p))) : g.moveTo(x(i), scale(get(p))));
+    g.stroke();
+  };
+  line(p => p.cooling, '#3ccf7a', yc);
+  line(p => p.setpoint, '#f5b13f', y);
+  line(p => p.temperature, '#3fa7f5', y);
+}
+
+async function refresh() {
+  try {
+    const r = await fetch('/api/state');
+    if (!r.ok) throw new Error((await r.json()).detail);
+    state = await r.json();
+    render(state);
+    history.push(state);
+    if (history.length > 300) history.shift();
+    drawTrend();
+  } catch (e) {
+    $('link').textContent = 'PLC offline: ' + e.message;
+  }
+  const t = await fetch('/api/traffic').then(r => r.json()).catch(() => []);
+  $('traffic').innerHTML = t.map(m => `<tr><td>${m.seq}</td><td>${m.time}</td>
+    <td class="${m.fc > 4 ? 'w' : ''}">${String(m.fc).padStart(2, '0')}</td><td>${m.name}</td>
+    <td>${m.address}</td><td>${m.count}</td><td>[${m.values.join(', ')}]</td></tr>`).join('');
+}
+
+refresh();
+setInterval(refresh, 1000);
+window.addEventListener('resize', drawTrend);
+</script>
+</body>
+</html>

@@ -17,6 +17,18 @@ A fully simulated air conditioning system that shows how Modbus TCP works:
   operator controls, and a log of every Modbus request it sends (function code,
   address, count, values).
 
+### Changing the PLC address from the HMI
+
+The HMI starts out polling the PLC set by `PLC_ADDR`, `PLC_PORT` and `PLC_UNIT`
+(`plc:5021`, unit 1 under Docker Compose). To point it at a different PLC, click the
+connection pill in the top right corner, enter the host or IP, port and unit ID, and
+press **Connect**. You can also paste an address like `modbus://192.168.1.50:502`
+into the host field. **Default** fills the form back in with the startup values.
+The change applies to every browser using that HMI and lasts until the HMI restarts.
+
+The same thing is available over HTTP: `GET /api/plc` returns the current target and
+`POST /api/plc` with `{"host": "...", "port": 502, "unit": 1}` switches to a new one.
+
 ## Run it
 
 ```bash

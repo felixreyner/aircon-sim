@@ -14,9 +14,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from pymodbus.client import AsyncModbusTcpClient
 
-PLC_HOST = os.getenv("PLC_ADDR", "127.0.0.1")
-PLC_PORT = int(os.getenv("PLC_PORT", "5021"))
-PLC_UNIT = int(os.getenv("PLC_UNIT", "1"))
+# The PLC target starts from the environment and can be changed at runtime from
+# the page through /api/plc, so the HMI can be pointed at another PLC.
+DEFAULT_TARGET = {
+    "host": os.getenv("PLC_ADDR", "127.0.0.1"),
+    "port": int(os.getenv("PLC_PORT", "5021")),
+    "unit": int(os.getenv("PLC_UNIT", "1")),
+}
+target = dict(DEFAULT_TARGET)
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 
 app = FastAPI(title="AirCon HMI")
@@ -35,17 +40,18 @@ def signed(value: int) -> int:
 async def modbus(fc: int, name: str, address: int, count=None, value=None):
     """Run one Modbus request against the PLC and log it."""
     global client, seq
+    unit = target["unit"]
     calls = {
-        1: lambda: client.read_coils(address, count=count, slave=PLC_UNIT),
-        2: lambda: client.read_discrete_inputs(address, count=count, slave=PLC_UNIT),
-        3: lambda: client.read_holding_registers(address, count=count, slave=PLC_UNIT),
-        4: lambda: client.read_input_registers(address, count=count, slave=PLC_UNIT),
-        5: lambda: client.write_coil(address, value, slave=PLC_UNIT),
-        6: lambda: client.write_register(address, value, slave=PLC_UNIT),
+        1: lambda: client.read_coils(address, count=count, slave=unit),
+        2: lambda: client.read_discrete_inputs(address, count=count, slave=unit),
+        3: lambda: client.read_holding_registers(address, count=count, slave=unit),
+        4: lambda: client.read_input_registers(address, count=count, slave=unit),
+        5: lambda: client.write_coil(address, value, slave=unit),
+        6: lambda: client.write_register(address, value, slave=unit),
     }
     async with lock:
         if client is None:
-            client = AsyncModbusTcpClient(PLC_HOST, port=PLC_PORT, timeout=1)
+            client = AsyncModbusTcpClient(target["host"], port=target["port"], timeout=1)
         if not client.connected:
             await client.connect()
         rr = await calls[fc]()
@@ -80,13 +86,45 @@ async def state():
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(503, f"PLC unreachable at {PLC_HOST}:{PLC_PORT}: {exc}")
+        raise HTTPException(503, f"PLC unreachable at {target['host']}:{target['port']}: {exc}")
     return {
         "power": bool(power), "compressor": bool(compressor), "alarm": bool(alarm),
         "sensor_fault": bool(fault), "setpoint": signed(setpoint) / 10, "mode": mode,
         "fan": fan, "alarm_limit": signed(alarm_limit) / 10, "temperature": signed(temp) / 10,
         "humidity": hum / 10, "cooling": cooling, "scans": scans,
     }
+
+
+class Target(BaseModel):
+    host: str
+    port: int
+    unit: int
+
+
+@app.get("/api/plc")
+async def get_plc():
+    return {**target, "default": DEFAULT_TARGET}
+
+
+@app.post("/api/plc")
+async def set_plc(body: Target):
+    """Point the HMI at another PLC: drop the old connection and try the new one."""
+    global client
+    host = body.host.strip()
+    if not host or any(c.isspace() for c in host) or "/" in host:
+        raise HTTPException(400, "host must be a hostname or IP address, without a scheme or path")
+    if not 1 <= body.port <= 65535:
+        raise HTTPException(400, "port must be between 1 and 65535")
+    if not 0 <= body.unit <= 255:
+        raise HTTPException(400, "unit ID must be between 0 and 255")
+    async with lock:
+        if client is not None:
+            client.close()
+        target.update(host=host, port=body.port, unit=body.unit)
+        client = AsyncModbusTcpClient(host, port=body.port, timeout=1)
+        connected = await client.connect()
+        traffic.clear()
+    return {**target, "connected": bool(connected)}
 
 
 @app.get("/api/traffic")

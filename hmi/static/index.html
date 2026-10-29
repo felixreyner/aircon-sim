@@ -97,7 +97,7 @@
   /* ---------- layout ---------- */
   main {
     display: grid; gap: 20px; padding: 24px; max-width: 1280px; margin: 0 auto;
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.75fr) minmax(300px, 1fr);
   }
   @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); padding: 16px; } header { padding: 12px 16px; } }
   .wide { grid-column: 1 / -1; }
@@ -121,79 +121,41 @@
   #banner.show { display: flex; }
   @keyframes flash { 50% { box-shadow: 0 0 30px rgba(255, 77, 109, .45); } }
 
-  /* ---------- thermostat ---------- */
-  .thermo { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 20px; align-items: center; }
-  @media (max-width: 600px) { .thermo { grid-template-columns: 1fr; } .brand small { display: none; } .brand h1 { white-space: nowrap; } }
-  .dial { position: relative; width: 100%; max-width: 380px; aspect-ratio: 1; margin: 0 auto; }
-  .dial svg { width: 100%; height: 100%; overflow: visible; }
-  .dial .center {
-    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; pointer-events: none;
-  }
-  .dial .label { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
-  .dial .temp {
-    font-size: clamp(56px, 11vw, 84px); font-weight: 200; line-height: 1; letter-spacing: -.03em;
-    font-variant-numeric: tabular-nums;
+  /* ---------- room climate ---------- */
+  .now { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+  .now-temp {
+    font-size: 64px; font-weight: 200; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums;
     background: linear-gradient(180deg, #fff, #9fdcff); -webkit-background-clip: text; background-clip: text; color: transparent;
   }
-  .dial .temp sup { font-size: .35em; font-weight: 400; vertical-align: top; margin-left: 2px; }
-  .target { display: flex; align-items: center; gap: 10px; margin-top: 10px; pointer-events: auto; }
-  .target output { font: 600 18px var(--mono); color: var(--warn); min-width: 64px; }
-  .target small { display: block; font-size: 10px; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; }
+  .now-temp sup { font-size: .32em; font-weight: 400; vertical-align: top; margin-left: 2px; }
+  .now-meta { display: grid; gap: 4px; text-align: right; color: var(--muted); font-size: 12px; }
+  .now-meta b { color: var(--text); font: 600 14px var(--mono); }
   .round {
     width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); cursor: pointer;
     color: var(--text); font-size: 20px; line-height: 1; background: var(--glass-hi); transition: .15s;
   }
   .round:hover { border-color: var(--cyan); box-shadow: 0 0 16px rgba(59, 232, 255, .35); }
   .round:active { transform: scale(.92); }
-  #arc-temp { transition: stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1); }
-  #knob-sp, #knob-alarm { transition: transform .6s cubic-bezier(.2,.8,.2,1); transform-origin: 150px 150px; }
-
-  .side { display: grid; gap: 14px; }
-  .metric { padding: 14px; border-radius: 14px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line); }
-  .metric small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; }
-  .metric b { display: block; font-size: 28px; font-weight: 300; font-variant-numeric: tabular-nums; }
-  .metric b em { font-style: normal; font-size: 13px; color: var(--muted); margin-left: 4px; }
-  .bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .06); overflow: hidden; margin-top: 8px; }
-  .bar div { height: 100%; width: 0; border-radius: 3px; transition: width .8s; }
-  #hum-bar { background: linear-gradient(90deg, var(--blue), var(--violet)); }
-  #cool-bar { background: linear-gradient(90deg, var(--cyan), var(--blue)); box-shadow: 0 0 12px var(--cyan); }
-
-  /* ---------- status tiles ---------- */
-  .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
-  @media (max-width: 600px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  .tile {
-    display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px;
-    background: rgba(255, 255, 255, .03); border: 1px solid var(--line); color: var(--muted); transition: .3s;
-  }
-  .tile i { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); flex: none; transition: .3s; }
-  .tile span { font-size: 12px; line-height: 1.2; }
-  .tile em { font-style: normal; }
-  .tile span b { display: block; color: var(--text); font-weight: 600; font-size: 13px; }
-  .tile.on { --c: var(--ok); color: var(--text); border-color: color-mix(in srgb, var(--c) 45%, transparent);
-             background: color-mix(in srgb, var(--c) 10%, transparent); }
-  .tile.on i { background: var(--c); box-shadow: 0 0 12px var(--c); }
-  .tile.cool.on { --c: var(--cyan); }
-  .tile.alarm.on { --c: var(--bad); animation: flash 1.2s infinite; }
+  @media (max-width: 600px) { .brand small { display: none; } .brand h1 { white-space: nowrap; } }
 
   /* ---------- controls ---------- */
   .power {
-    width: 100%; display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: 16px; cursor: pointer;
+    width: 100%; display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 16px; cursor: pointer;
     font: inherit; color: var(--text); text-align: left; background: rgba(255, 255, 255, .03);
     border: 1px solid var(--line); transition: .25s;
   }
   .power .ring {
-    width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; flex: none;
+    width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; flex: none;
     border: 2px solid var(--dim); color: var(--muted); transition: .25s;
   }
-  .power .ring svg { width: 24px; height: 24px; }
-  .power b { display: block; font-size: 18px; }
+  .power .ring svg { width: 20px; height: 20px; }
+  .power b { display: block; font-size: 16px; }
   .power small { color: var(--muted); }
   .power.on { border-color: rgba(59, 232, 255, .5); background: linear-gradient(135deg, rgba(59,232,255,.14), rgba(77,124,255,.08)); }
   .power.on .ring { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 22px rgba(59, 232, 255, .5), inset 0 0 12px rgba(59,232,255,.3); }
   .power:hover { border-color: var(--cyan); }
 
-  .ctl { margin-top: 18px; }
+  .ctl { margin-top: 16px; }
   .ctl > label { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px;
                  text-transform: uppercase; letter-spacing: .14em; margin-bottom: 8px; }
   .seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px;
@@ -208,22 +170,17 @@
   .seg button.active { color: #04121c; background: linear-gradient(135deg, var(--cyan), var(--blue));
                        box-shadow: 0 6px 20px rgba(59, 232, 255, .35); }
 
-  .fanrow { display: flex; align-items: center; gap: 14px; }
-  .fanrow .seg { flex: 1; }
-  #fan-icon { width: 46px; height: 46px; flex: none; color: var(--cyan); filter: drop-shadow(0 0 8px rgba(59,232,255,.5)); }
-  #fan-icon.off { color: var(--dim); filter: none; }
-  #fan-blades { transform-origin: 50% 50%; animation: spin linear infinite; animation-duration: 0s; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
   .stepper { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px;
              border-radius: 14px; background: rgba(0, 0, 0, .25); border: 1px solid var(--line); }
   .stepper output { font: 600 20px var(--mono); color: var(--bad); }
+  .stepper output.sp { color: var(--warn); }
   .stepper output em { font-style: normal; font-size: 12px; color: var(--muted); margin-left: 4px; }
   #error { min-height: 1.4em; margin-top: 12px; color: var(--bad); font-size: 12px; }
 
   /* ---------- system architecture ---------- */
-  .topo-scroll { overflow-x: auto; margin: 0 -4px; }
-  .topo-scroll svg { width: 100%; min-width: 680px; height: auto; display: block; }
+  .topo { display: flex; flex-direction: column; }
+  .topo-scroll { overflow-x: auto; margin: 0 -4px; flex: 1; display: flex; align-items: center; }
+  .topo-scroll svg { width: 100%; min-width: 620px; height: auto; display: block; }
   .topo text { font-family: Inter, system-ui, sans-serif; }
   .topo .lvl { font-size: 10px; font-weight: 600; letter-spacing: .14em; fill: #7d8bab; text-transform: uppercase; }
   .topo .lvl-sub { font-size: 10px; fill: #3a4663; }
@@ -304,149 +261,109 @@
 <main>
   <div id="banner" class="wide"></div>
 
-  <section class="card wide topo">
+  <section class="card topo">
     <h2>System architecture <span id="topo-label">--</span></h2>
     <div class="topo-scroll">
-    <svg viewBox="0 0 900 380" role="img" aria-label="OT architecture: HMI, PLC, temperature control loop, temperature transmitter and AC unit inside the building">
+    <svg viewBox="0 0 820 480" role="img" aria-label="OT architecture: HMI, PLC, temperature control loop, temperature transmitter and AC unit inside the building">
       <!-- Purdue levels -->
-      <line class="sep" x1="16" y1="135" x2="884" y2="135"/>
-      <line class="sep" x1="16" y1="250" x2="884" y2="250"/>
-      <text class="lvl" x="20" y="80">Level 2</text><text class="lvl-sub" x="20" y="96">Supervisory</text>
-      <text class="lvl" x="20" y="195">Level 1</text><text class="lvl-sub" x="20" y="211">Control</text>
-      <text class="lvl" x="20" y="310">Level 0</text><text class="lvl-sub" x="20" y="326">Process</text>
+      <line class="sep" x1="16" y1="168" x2="804" y2="168"/>
+      <line class="sep" x1="16" y1="318" x2="804" y2="318"/>
+      <text class="lvl" x="20" y="100">Level 2</text><text class="lvl-sub" x="20" y="116">Supervisory</text>
+      <text class="lvl" x="20" y="250">Level 1</text><text class="lvl-sub" x="20" y="266">Control</text>
+      <text class="lvl" x="20" y="400">Level 0</text><text class="lvl-sub" x="20" y="416">Process</text>
 
       <!-- building boundary -->
-      <rect class="bldg" x="130" y="22" width="754" height="346" rx="16"/>
+      <rect class="bldg" x="130" y="22" width="680" height="446" rx="16"/>
       <path class="icon" d="M148 46v-14l8-5 8 5v14M152 46v-4h8v4" transform="translate(0 -2)"/>
       <text class="lvl" x="172" y="42">Building · plant room</text>
 
       <!-- links (drawn under the nodes) -->
-      <path id="l-hmi" class="link" d="M370 120 V158"/>
-      <path id="l-tt" class="link" d="M370 230 V274"/>
-      <path id="l-tic" class="link logic" d="M475 194 H580"/>
-      <path id="l-ac" class="link ctl" d="M685 230 V274"/>
-      <text class="link-lbl" x="380" y="143" id="lbl-hmi">Modbus TCP</text>
-      <text class="link-lbl" x="380" y="258">Modbus TCP · PV</text>
-      <text class="link-lbl" x="488" y="186">PID logic</text>
-      <text class="link-lbl" x="695" y="258" id="lbl-ac">OUT --%</text>
+      <path id="l-hmi" class="link" d="M345 136 V214"/>
+      <path id="l-tt" class="link" d="M345 286 V364"/>
+      <path id="l-tic" class="link logic" d="M460 250 H560"/>
+      <path id="l-ac" class="link ctl" d="M675 286 V364"/>
+      <text class="link-lbl" x="355" y="179" id="lbl-hmi">Modbus TCP</text>
+      <text class="link-lbl" x="355" y="329">Modbus TCP · PV</text>
+      <text class="link-lbl" x="482" y="242">PID logic</text>
+      <text class="link-lbl" x="685" y="329" id="lbl-ac">OUT --%</text>
       <circle class="pkt p-hmi" r="3.5" fill="#3be8ff"><animateMotion dur="1s" begin="0s" repeatCount="indefinite" ><mpath href="#l-hmi"/></animateMotion></circle><circle class="pkt p-hmi" r="3.5" fill="#3cf0a0"><animateMotion dur="1s" begin=".5s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#l-hmi"/></animateMotion></circle>
       <circle class="pkt p-tt" r="3.5" fill="#3cf0a0"><animateMotion dur="1.2s" begin="0s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#l-tt"/></animateMotion></circle>
       <circle class="pkt p-tic" r="3.5" fill="#9a6bff"><animateMotion dur="1.4s" begin="0s" repeatCount="indefinite" ><mpath href="#l-tic"/></animateMotion></circle>
       <circle class="pkt p-ac" r="3.5" fill="#3be8ff"><animateMotion dur="1s" begin="0s" repeatCount="indefinite" ><mpath href="#l-ac"/></animateMotion></circle>
 
       <g class="node" id="n-hmi">
-        <rect class="box" x="265" y="48" width="210" height="72" rx="12"/>
-        <g transform="translate(277 64)"><rect class="icon" x="0" y="2" width="40" height="27" rx="3"/><path class="icon" d="M14 37h12M20 29v8M6 22l7-7 6 5 8-9 7 6"/></g>
-        <text class="t" x="327" y="70">Web HMI</text><text class="tag" x="463" y="70" text-anchor="end">HMI-01</text>
-        <text class="v" x="327" y="88" id="v-hmi1">--</text><text class="v" x="327" y="103" id="v-hmi2">--</text>
+        <rect class="box" x="230" y="64" width="230" height="72" rx="12"/>
+        <g transform="translate(242 80)"><rect class="icon" x="0" y="2" width="40" height="27" rx="3"/><path class="icon" d="M14 37h12M20 29v8M6 22l7-7 6 5 8-9 7 6"/></g>
+        <text class="t" x="292" y="86">Web HMI</text><text class="tag" x="448" y="86" text-anchor="end">HMI-01</text>
+        <text class="v" x="292" y="104" id="v-hmi1">--</text><text class="v" x="292" y="119" id="v-hmi2">--</text>
       </g>
       <g class="node" id="n-plc">
-        <rect class="box" x="265" y="158" width="210" height="72" rx="12"/>
-        <g transform="translate(277 174)"><rect class="icon" x="2" y="0" width="36" height="40" rx="3"/><path class="icon" d="M14 0v40M26 0v40"/><circle class="led" id="plc-run" cx="8" cy="8" r="2.6" fill="#3a4663"/><circle class="led" id="plc-err" cx="8" cy="16" r="2.6" fill="#3a4663"/><path class="icon" d="M18 8h4M18 14h4M18 20h4M30 8h4M30 14h4M30 20h4"/></g>
-        <text class="t" x="327" y="180">PLC</text><text class="tag" x="463" y="180" text-anchor="end">PLC-01</text>
-        <text class="v" x="327" y="198" id="v-plc1">--</text><text class="v" x="327" y="213" id="v-plc2">--</text>
+        <rect class="box" x="230" y="214" width="230" height="72" rx="12"/>
+        <g transform="translate(242 230)"><rect class="icon" x="2" y="0" width="36" height="40" rx="3"/><path class="icon" d="M14 0v40M26 0v40"/><circle class="led" id="plc-run" cx="8" cy="8" r="2.6" fill="#3a4663"/><circle class="led" id="plc-err" cx="8" cy="16" r="2.6" fill="#3a4663"/><path class="icon" d="M18 8h4M18 14h4M18 20h4M30 8h4M30 14h4M30 20h4"/></g>
+        <text class="t" x="292" y="236">PLC</text><text class="tag" x="448" y="236" text-anchor="end">PLC-01</text>
+        <text class="v" x="292" y="254" id="v-plc1">--</text><text class="v" x="292" y="269" id="v-plc2">--</text>
       </g>
       <g class="node" id="n-tic">
-        <rect class="box" x="580" y="158" width="210" height="72" rx="12"/>
-        <g transform="translate(592 174)"><circle class="isa" cx="20" cy="20" r="19"/><line x1="1" y1="20" x2="39" y2="20" stroke="#9fb6ff" stroke-width="1.6"/><text class="isa-t" x="20" y="16">TIC</text><text class="isa-t" x="20" y="33">01</text></g>
-        <text class="t" x="642" y="180">Temp control</text><text class="tag" x="778" y="180" text-anchor="end">TIC-01</text>
-        <text class="v" x="642" y="198" id="v-tic1">--</text><text class="v" x="642" y="213" id="v-tic2">--</text>
+        <rect class="box" x="560" y="214" width="230" height="72" rx="12"/>
+        <g transform="translate(572 230)"><circle class="isa" cx="20" cy="20" r="19"/><line x1="1" y1="20" x2="39" y2="20" stroke="#9fb6ff" stroke-width="1.6"/><text class="isa-t" x="20" y="16">TIC</text><text class="isa-t" x="20" y="33">01</text></g>
+        <text class="t" x="622" y="236">Temp control</text><text class="tag" x="778" y="236" text-anchor="end">TIC-01</text>
+        <text class="v" x="622" y="254" id="v-tic1">--</text><text class="v" x="622" y="269" id="v-tic2">--</text>
       </g>
       <g class="node" id="n-tt">
-        <rect class="box" x="265" y="274" width="210" height="72" rx="12"/>
-        <g transform="translate(277 290)"><circle class="isa" cx="20" cy="20" r="19"/><text class="isa-t" x="20" y="16">TT</text><text class="isa-t" x="20" y="33">01</text></g>
-        <text class="t" x="327" y="296">Temp sensor</text><text class="tag" x="463" y="296" text-anchor="end">TT-01</text>
-        <text class="v" x="327" y="314" id="v-tt1">--</text><text class="v" x="327" y="329" id="v-tt2">--</text>
+        <rect class="box" x="230" y="364" width="230" height="72" rx="12"/>
+        <g transform="translate(242 380)"><circle class="isa" cx="20" cy="20" r="19"/><text class="isa-t" x="20" y="16">TT</text><text class="isa-t" x="20" y="33">01</text></g>
+        <text class="t" x="292" y="386">Temp sensor</text><text class="tag" x="448" y="386" text-anchor="end">TT-01</text>
+        <text class="v" x="292" y="404" id="v-tt1">--</text><text class="v" x="292" y="419" id="v-tt2">--</text>
       </g>
       <g class="node" id="n-ac">
-        <rect class="box" x="580" y="274" width="210" height="72" rx="12"/>
-        <g transform="translate(592 290)"><rect class="icon" x="0" y="4" width="40" height="32" rx="4"/><circle class="icon" cx="15" cy="20" r="11"/><g id="ac-fan" fill="#9fb6ff"><circle cx="15" cy="20" r="2"/><path d="M15 18c-1-5 1-8 4-8s1 5-2 8z"/><path d="M15 18c-1-5 1-8 4-8s1 5-2 8z" transform="rotate(120 15 20)"/><path d="M15 18c-1-5 1-8 4-8s1 5-2 8z" transform="rotate(240 15 20)"/></g><path class="icon" d="M30 11h6M30 16h6M30 21h6M30 26h6"/><circle class="led" id="ac-led" cx="36" cy="32" r="1.8" fill="#3a4663"/></g>
-        <text class="t" x="642" y="296">AC unit</text><text class="tag" x="778" y="296" text-anchor="end">AC-01</text>
-        <text class="v" x="642" y="314" id="v-ac1">--</text><text class="v" x="642" y="329" id="v-ac2">--</text>
+        <rect class="box" x="560" y="364" width="230" height="72" rx="12"/>
+        <g transform="translate(572 380)"><rect class="icon" x="0" y="4" width="40" height="32" rx="4"/><circle class="icon" cx="15" cy="20" r="11"/><g id="ac-fan" fill="#9fb6ff"><circle cx="15" cy="20" r="2"/><path d="M15 18c-1-5 1-8 4-8s1 5-2 8z"/><path d="M15 18c-1-5 1-8 4-8s1 5-2 8z" transform="rotate(120 15 20)"/><path d="M15 18c-1-5 1-8 4-8s1 5-2 8z" transform="rotate(240 15 20)"/></g><path class="icon" d="M30 11h6M30 16h6M30 21h6M30 26h6"/><circle class="led" id="ac-led" cx="36" cy="32" r="1.8" fill="#3a4663"/></g>
+        <text class="t" x="622" y="386">AC unit</text><text class="tag" x="778" y="386" text-anchor="end">AC-01</text>
+        <text class="v" x="622" y="404" id="v-ac1">--</text><text class="v" x="622" y="419" id="v-ac2">--</text>
       </g>
     </svg>
     </div>
   </section>
   <section class="card">
     <h2>Room climate <span id="mode-label">--</span></h2>
-    <div class="thermo">
-      <div class="dial">
-        <svg viewBox="0 0 300 300">
-          <defs>
-            <linearGradient id="g-arc" x1="0" y1="1" x2="1" y2="0">
-              <stop offset="0" stop-color="#3be8ff"/><stop offset=".55" stop-color="#4d7cff"/>
-              <stop offset="1" stop-color="#ff4d6d"/>
-            </linearGradient>
-            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
-          </defs>
-          <g id="ticks"></g>
-          <path id="arc-track" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="14" stroke-linecap="round"/>
-          <path id="arc-temp" fill="none" stroke="url(#g-arc)" stroke-width="14" stroke-linecap="round" filter="url(#glow)"/>
-          <g id="knob-alarm"><circle cx="150" cy="22" r="5" fill="#ff4d6d" filter="url(#glow)"/></g>
-          <g id="knob-sp"><circle cx="150" cy="22" r="9" fill="#070b14" stroke="#ffb547" stroke-width="3" filter="url(#glow)"/></g>
-        </svg>
-        <div class="center">
-          <div class="label">Room</div>
-          <div class="temp"><span id="temp">--</span><sup>°C</sup></div>
-          <div class="target">
-            <button class="round" data-step="setpoint" data-delta="-0.5" aria-label="Lower setpoint">−</button>
-            <div><small>Target</small><output id="setpoint">--</output></div>
-            <button class="round" data-step="setpoint" data-delta="0.5" aria-label="Raise setpoint">+</button>
-          </div>
-        </div>
-      </div>
-      <div class="side">
-        <div class="metric"><small>Humidity</small><b><span id="hum">--</span><em>%RH</em></b>
-          <div class="bar"><div id="hum-bar"></div></div></div>
-        <div class="metric"><small>Cooling output</small><b><span id="cooling">--</span><em>%</em></b>
-          <div class="bar"><div id="cool-bar"></div></div></div>
-        <div class="metric"><small>PLC scans</small><b><span id="scans">--</span></b></div>
+    <div class="now">
+      <div class="now-temp"><span id="temp">--</span><sup>°C</sup></div>
+      <div class="now-meta">
+        <span>Humidity <b id="hum">--</b> %RH</span>
+        <span>Cooling <b id="cooling">--</b> %</span>
       </div>
     </div>
-    <div class="tiles">
-      <div class="tile" id="led-power"><i></i><span><b>Power</b><em id="t-power">off</em></span></div>
-      <div class="tile cool" id="led-comp"><i></i><span><b>Compressor</b><em id="t-comp">idle</em></span></div>
-      <div class="tile alarm" id="led-alarm"><i></i><span><b>High temp</b><em id="t-alarm">normal</em></span></div>
-      <div class="tile alarm" id="led-fault"><i></i><span><b>Sensor link</b><em id="t-fault">ok</em></span></div>
-    </div>
-  </section>
 
-  <section class="card">
-    <h2>Controls</h2>
     <button class="power" id="power-btn">
       <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
         <path d="M12 3v8M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></div>
       <div><b id="power-text">--</b><small>Coil 0 · tap to toggle</small></div>
     </button>
 
+    <div class="ctl"><label>Setpoint <span>HR 0</span></label>
+      <div class="stepper">
+        <button class="round" data-step="setpoint" data-delta="-0.5" aria-label="Lower setpoint">−</button>
+        <output class="sp"><span id="setpoint">--</span><em>°C</em></output>
+        <button class="round" data-step="setpoint" data-delta="0.5" aria-label="Raise setpoint">+</button>
+      </div>
+    </div>
+
     <div class="ctl"><label>Mode <span>HR 1</span></label>
       <div class="seg">
-        <button data-tag="mode" data-value="0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M12 2v20M3.3 7l17.4 10M20.7 7L3.3 17M9 4l3 2 3-2M9 20l3-2 3 2"/></svg>Cool</button>
-        <button data-tag="mode" data-value="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h7"/></svg>Fan only</button>
+        <button data-tag="mode" data-value="0">Cool</button>
+        <button data-tag="mode" data-value="1">Fan only</button>
       </div>
     </div>
 
     <div class="ctl"><label>Fan speed <span>HR 2</span></label>
-      <div class="fanrow">
-        <svg id="fan-icon" viewBox="0 0 48 48"><g id="fan-blades" fill="currentColor">
-          <circle cx="24" cy="24" r="4"/>
-          <path d="M24 20c-2-8 2-15 7-14s3 9-3 14z"/>
-          <path d="M24 20c-2-8 2-15 7-14s3 9-3 14z" transform="rotate(120 24 24)"/>
-          <path d="M24 20c-2-8 2-15 7-14s3 9-3 14z" transform="rotate(240 24 24)"/>
-        </g></svg>
-        <div class="seg">
-          <button data-tag="fan" data-value="1">Low</button>
-          <button data-tag="fan" data-value="2">Med</button>
-          <button data-tag="fan" data-value="3">High</button>
-        </div>
+      <div class="seg">
+        <button data-tag="fan" data-value="1">Low</button>
+        <button data-tag="fan" data-value="2">Med</button>
+        <button data-tag="fan" data-value="3">High</button>
       </div>
     </div>
 
-    <div class="ctl"><label>High temp alarm limit <span>HR 3</span></label>
+    <div class="ctl"><label>High temp alarm <span>HR 3</span></label>
       <div class="stepper">
         <button class="round" data-step="alarm_limit" data-delta="-1" aria-label="Lower alarm limit">−</button>
         <output><span id="alarm_limit">--</span><em>°C</em></output>
@@ -479,38 +396,6 @@ const history = [];
 let state = null;
 let plc = null;
 
-// Dial geometry: a 270° arc on a 300×300 viewBox, spanning DIAL_MIN..DIAL_MAX °C.
-const DIAL_MIN = 14, DIAL_MAX = 40, CX = 150, CY = 150, R = 128, START = -135, SWEEP = 270;
-const polar = (deg, r = R) => {
-  const a = (deg - 90) * Math.PI / 180;
-  return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
-};
-const arcPath = (from, to) => {
-  const [x1, y1] = polar(from), [x2, y2] = polar(to);
-  return `M${x1} ${y1} A${R} ${R} 0 ${to - from > 180 ? 1 : 0} 1 ${x2} ${y2}`;
-};
-const angleOf = v => START + SWEEP * Math.min(1, Math.max(0, (v - DIAL_MIN) / (DIAL_MAX - DIAL_MIN)));
-(function buildDial() {
-  $('arc-track').setAttribute('d', arcPath(START, START + SWEEP));
-  const arc = $('arc-temp');
-  arc.setAttribute('d', arcPath(START, START + SWEEP));
-  const len = arc.getTotalLength();
-  arc.style.strokeDasharray = len;
-  arc.style.strokeDashoffset = len;
-  arc.dataset.len = len;
-  let ticks = '';
-  for (let v = DIAL_MIN; v <= DIAL_MAX; v++) {
-    const major = v % 5 === 0, a = angleOf(v);
-    const [x1, y1] = polar(a, R + 14), [x2, y2] = polar(a, R + (major ? 24 : 19));
-    ticks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(160,190,255,${major ? .45 : .18})" stroke-width="${major ? 2 : 1}"/>`;
-    if (major) {
-      const [tx, ty] = polar(a, R + 36);
-      ticks += `<text x="${tx}" y="${ty + 4}" fill="#7d8bab" font-size="11" text-anchor="middle">${v}</text>`;
-    }
-  }
-  $('ticks').innerHTML = ticks;
-})();
-
 async function write(tag, value) {
   const r = await fetch('/api/write', {method: 'POST', headers: {'Content-Type': 'application/json'},
                                        body: JSON.stringify({tag, value})});
@@ -524,31 +409,13 @@ document.querySelectorAll('button[data-step]').forEach(b =>
   b.onclick = () => state && write(b.dataset.step, state[b.dataset.step] + Number(b.dataset.delta)));
 $('power-btn').onclick = () => state && write('power', state.power ? 0 : 1);
 
-function setTile(id, on, textId, onText, offText) {
-  $(id).classList.toggle('on', on);
-  $(textId).textContent = on ? onText : offText;
-}
-
 function render(s) {
   $('temp').textContent = s.temperature.toFixed(1);
   $('hum').textContent = s.humidity.toFixed(1);
-  $('setpoint').textContent = s.setpoint.toFixed(1) + '°';
-  $('alarm_limit').textContent = s.alarm_limit.toFixed(0);
   $('cooling').textContent = s.cooling;
-  $('scans').textContent = s.scans.toLocaleString();
-  $('hum-bar').style.width = Math.min(100, s.humidity) + '%';
-  $('cool-bar').style.width = s.cooling + '%';
+  $('setpoint').textContent = s.setpoint.toFixed(1);
+  $('alarm_limit').textContent = s.alarm_limit.toFixed(0);
   $('mode-label').textContent = s.power ? (s.mode === 0 ? 'cooling mode' : 'fan only') : 'standby';
-
-  const arc = $('arc-temp'), len = Number(arc.dataset.len);
-  arc.style.strokeDashoffset = len * (1 - (angleOf(s.temperature) - START) / SWEEP);
-  $('knob-sp').style.transform = `rotate(${angleOf(s.setpoint)}deg)`;
-  $('knob-alarm').style.transform = `rotate(${angleOf(s.alarm_limit)}deg)`;
-
-  setTile('led-power', s.power, 't-power', 'on', 'off');
-  setTile('led-comp', s.compressor, 't-comp', `running ${s.cooling}%`, 'idle');
-  setTile('led-alarm', s.alarm, 't-alarm', 'ALARM', 'normal');
-  setTile('led-fault', s.sensor_fault, 't-fault', 'COMM FAULT', 'ok');
 
   const alarms = [];
   if (s.alarm) alarms.push(`High temperature alarm: room ${s.temperature.toFixed(1)} °C is above the ${s.alarm_limit.toFixed(0)} °C limit`);
@@ -558,9 +425,6 @@ function render(s) {
 
   $('power-btn').classList.toggle('on', s.power);
   $('power-text').textContent = s.power ? 'System on' : 'System off';
-  const spinning = s.power;
-  $('fan-icon').classList.toggle('off', !spinning);
-  $('fan-blades').style.animationDuration = spinning ? `${1.6 / s.fan}s` : '0s';
 
   renderTopo(s);
 

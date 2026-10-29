@@ -221,32 +221,36 @@
   .stepper output em { font-style: normal; font-size: 12px; color: var(--muted); margin-left: 4px; }
   #error { min-height: 1.4em; margin-top: 12px; color: var(--bad); font-size: 12px; }
 
-  /* ---------- site overview ---------- */
-  .site svg { width: 100%; height: auto; display: block; }
-  .site .wall { fill: rgba(32, 44, 70, .75); stroke: rgba(120, 160, 255, .35); stroke-width: 1.5; }
-  .site .win { fill: rgba(77, 124, 255, .16); stroke: rgba(120, 160, 255, .25); }
-  .site .lbl { font: 600 11px Inter, system-ui, sans-serif; letter-spacing: .14em; fill: #7d8bab; text-transform: uppercase; }
-  .site .val { font: 600 13px ui-monospace, Menlo, monospace; fill: #e8eefc; }
-  #room-glow { transition: fill 1s; }
-  .site .unit { fill: #dfe8ff; stroke: rgba(255, 255, 255, .6); transition: .4s; }
-  .site:not(.is-on) .unit { fill: #5a6683; }
-  .site .flow, .site .air, .site .heat { opacity: 0; transition: opacity .4s; }
-  .site .flow { stroke-dasharray: 6 8; animation: dash 1s linear infinite; }
-  .site .air { stroke-dasharray: 4 6; animation: dash 1.2s linear infinite; }
-  .site.is-on .air { opacity: .55; }
-  .site.is-running .air { opacity: 1; }
-  .site.is-running .flow { opacity: 1; }
-  .site.is-running .heat { opacity: 1; animation: rise 2s ease-out infinite; }
-  .site .heat:nth-child(2) { animation-delay: .6s; }
-  .site .heat:nth-child(3) { animation-delay: 1.2s; }
-  @keyframes dash { to { stroke-dashoffset: -28; } }
-  @keyframes rise { from { transform: translateY(8px); opacity: .9; } to { transform: translateY(-14px); opacity: 0; } }
-  #odu-fan { transform-box: fill-box; transform-origin: center; animation: spin linear infinite; animation-duration: 0s; }
-  #odu-led, #idu-led { transition: .3s; }
-  #sensor-dot { transition: .3s; }
-  .site-legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
-  @media (max-width: 600px) { .site-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  .site-legend .tile span { min-width: 0; overflow-wrap: anywhere; }
+  /* ---------- system architecture ---------- */
+  .topo-scroll { overflow-x: auto; margin: 0 -4px; }
+  .topo-scroll svg { width: 100%; min-width: 680px; height: auto; display: block; }
+  .topo text { font-family: Inter, system-ui, sans-serif; }
+  .topo .lvl { font-size: 10px; font-weight: 600; letter-spacing: .14em; fill: #7d8bab; text-transform: uppercase; }
+  .topo .lvl-sub { font-size: 10px; fill: #3a4663; }
+  .topo .sep { stroke: rgba(120, 160, 255, .12); stroke-dasharray: 3 5; }
+  .topo .bldg { fill: rgba(77, 124, 255, .04); stroke: rgba(120, 160, 255, .35); stroke-dasharray: 8 6; }
+  .topo .node rect.box { fill: rgba(20, 28, 46, .9); stroke: var(--line); stroke-width: 1.5; transition: stroke .3s; }
+  .topo .node.ok rect.box { stroke: rgba(60, 240, 160, .55); }
+  .topo .node.active rect.box { stroke: rgba(59, 232, 255, .7); }
+  .topo .node.bad rect.box { stroke: rgba(255, 77, 109, .8); }
+  .topo .node .t { font-size: 13px; font-weight: 600; fill: #e8eefc; }
+  .topo .node .tag { font: 10px ui-monospace, Menlo, monospace; fill: #7d8bab; }
+  .topo .node .v { font: 11px ui-monospace, Menlo, monospace; fill: #9fdcff; }
+  .topo .node.bad .v { fill: #ff4d6d; }
+  .topo .icon { fill: none; stroke: #9fb6ff; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .topo .isa { fill: rgba(0, 0, 0, .3); stroke: #9fb6ff; stroke-width: 1.6; }
+  .topo .isa-t { font: 700 10px ui-monospace, Menlo, monospace; fill: #e8eefc; text-anchor: middle; }
+  .topo .link { fill: none; stroke: var(--dim); stroke-width: 2.5; transition: stroke .3s; }
+  .topo .link.ok { stroke: rgba(60, 240, 160, .6); }
+  .topo .link.bad { stroke: #ff4d6d; stroke-dasharray: 6 5; }
+  .topo .link.logic { stroke-dasharray: 2 5; }
+  .topo .link.ctl.ok { stroke: rgba(59, 232, 255, .7); }
+  .topo .link-lbl { font: 10px ui-monospace, Menlo, monospace; fill: #7d8bab; }
+  .topo .pkt { opacity: 0; transition: opacity .3s; }
+  .topo .pkt.on { opacity: 1; }
+  .topo .led { transition: fill .3s; }
+  #plc-run.on { animation: pulse 1s infinite; }
+  #ac-fan { transform-box: fill-box; transform-origin: center; animation: spin linear infinite; animation-duration: 0s; }
 
   /* ---------- trend ---------- */
   canvas { width: 100%; height: 240px; display: block; }
@@ -300,91 +304,69 @@
 <main>
   <div id="banner" class="wide"></div>
 
-  <section class="card wide site" id="site">
-    <h2>Site overview <span id="site-label">--</span></h2>
-    <svg viewBox="0 0 800 250" role="img" aria-label="Building with an indoor AC unit piped to an outdoor condensing unit">
-      <defs>
-        <linearGradient id="g-sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#4d7cff" stop-opacity=".10"/><stop offset="1" stop-color="#4d7cff" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
-      <rect x="0" y="0" width="800" height="230" fill="url(#g-sky)" rx="12"/>
-      <!-- sun: the hot outdoors -->
-      <circle cx="740" cy="46" r="18" fill="#ffb547" opacity=".85" filter="url(#glow)"/>
-      <line x1="0" y1="230" x2="800" y2="230" stroke="rgba(120,160,255,.35)" stroke-width="2"/>
+  <section class="card wide topo">
+    <h2>System architecture <span id="topo-label">--</span></h2>
+    <div class="topo-scroll">
+    <svg viewBox="0 0 900 380" role="img" aria-label="OT architecture: HMI, PLC, temperature control loop, temperature transmitter and AC unit inside the building">
+      <!-- Purdue levels -->
+      <line class="sep" x1="16" y1="135" x2="884" y2="135"/>
+      <line class="sep" x1="16" y1="250" x2="884" y2="250"/>
+      <text class="lvl" x="20" y="80">Level 2</text><text class="lvl-sub" x="20" y="96">Supervisory</text>
+      <text class="lvl" x="20" y="195">Level 1</text><text class="lvl-sub" x="20" y="211">Control</text>
+      <text class="lvl" x="20" y="310">Level 0</text><text class="lvl-sub" x="20" y="326">Process</text>
 
-      <!-- building -->
-      <rect class="wall" x="40" y="60" width="360" height="170" rx="4"/>
-      <rect x="34" y="54" width="372" height="10" rx="3" fill="rgba(120,160,255,.35)"/>
-      <line x1="40" y1="150" x2="400" y2="150" stroke="rgba(120,160,255,.3)"/>
-      <rect class="win" x="60" y="80" width="50" height="46" rx="3"/>
-      <rect class="win" x="125" y="80" width="50" height="46" rx="3"/>
-      <rect class="win" x="60" y="166" width="50" height="46" rx="3"/>
-      <rect class="win" x="125" y="166" width="50" height="46" rx="3"/>
-      <rect x="200" y="172" width="34" height="58" rx="3" fill="rgba(0,0,0,.35)" stroke="rgba(120,160,255,.3)"/>
-      <rect class="win" x="250" y="166" width="50" height="46" rx="3"/>
-      <rect class="win" x="320" y="166" width="58" height="46" rx="3"/>
-      <text class="lbl" x="44" y="46">Building</text>
+      <!-- building boundary -->
+      <rect class="bldg" x="130" y="22" width="754" height="346" rx="16"/>
+      <path class="icon" d="M148 46v-14l8-5 8 5v14M152 46v-4h8v4" transform="translate(0 -2)"/>
+      <text class="lvl" x="172" y="42">Building · plant room</text>
 
-      <!-- controlled room, shown cut away -->
-      <rect id="room-glow" x="196" y="70" width="196" height="74" rx="4" fill="rgba(59,232,255,.10)" stroke="rgba(59,232,255,.45)"/>
-      <text class="lbl" x="206" y="88">Room</text>
-      <text class="val" x="206" y="132" id="site-temp">-- °C</text>
-      <!-- room sensor -->
-      <circle id="sensor-dot" cx="214" cy="106" r="5" fill="#3cf0a0"/>
-      <text class="lbl" x="224" y="110" style="font-size:9px">Sensor</text>
-      <!-- indoor unit (wall split) -->
-      <rect class="unit" x="292" y="78" width="88" height="20" rx="6"/>
-      <line x1="298" y1="93" x2="374" y2="93" stroke="rgba(0,0,0,.35)" stroke-width="2"/>
-      <circle id="idu-led" cx="370" cy="85" r="2.5" fill="#3a4663"/>
-      <g fill="none" stroke="#3be8ff" stroke-width="2" stroke-linecap="round">
-        <path class="air" d="M305 104 q-6 14 -2 30"/>
-        <path class="air" d="M325 104 q-6 14 -2 30"/>
-        <path class="air" d="M345 104 q-6 14 -2 30"/>
-        <path class="air" d="M365 104 q-6 14 -2 30"/>
-      </g>
+      <!-- links (drawn under the nodes) -->
+      <path id="l-hmi" class="link" d="M370 120 V158"/>
+      <path id="l-tt" class="link" d="M370 230 V274"/>
+      <path id="l-tic" class="link logic" d="M475 194 H580"/>
+      <path id="l-ac" class="link ctl" d="M685 230 V274"/>
+      <text class="link-lbl" x="380" y="143" id="lbl-hmi">Modbus TCP</text>
+      <text class="link-lbl" x="380" y="258">Modbus TCP · PV</text>
+      <text class="link-lbl" x="488" y="186">PID logic</text>
+      <text class="link-lbl" x="695" y="258" id="lbl-ac">OUT --%</text>
+      <circle class="pkt p-hmi" r="3.5" fill="#3be8ff"><animateMotion dur="1s" begin="0s" repeatCount="indefinite" ><mpath href="#l-hmi"/></animateMotion></circle><circle class="pkt p-hmi" r="3.5" fill="#3cf0a0"><animateMotion dur="1s" begin=".5s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#l-hmi"/></animateMotion></circle>
+      <circle class="pkt p-tt" r="3.5" fill="#3cf0a0"><animateMotion dur="1.2s" begin="0s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#l-tt"/></animateMotion></circle>
+      <circle class="pkt p-tic" r="3.5" fill="#9a6bff"><animateMotion dur="1.4s" begin="0s" repeatCount="indefinite" ><mpath href="#l-tic"/></animateMotion></circle>
+      <circle class="pkt p-ac" r="3.5" fill="#3be8ff"><animateMotion dur="1s" begin="0s" repeatCount="indefinite" ><mpath href="#l-ac"/></animateMotion></circle>
 
-      <!-- refrigerant lines: cold suction and hot discharge -->
-      <g fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M380 84 H460 V178 H490" stroke="rgba(59,232,255,.25)"/>
-        <path d="M380 92 H452 V186 H490" stroke="rgba(255,181,71,.25)"/>
-        <path class="flow" d="M490 178 H460 V84 H380" stroke="#3be8ff"/>
-        <path class="flow" d="M380 92 H452 V186 H490" stroke="#ffb547"/>
+      <g class="node" id="n-hmi">
+        <rect class="box" x="265" y="48" width="210" height="72" rx="12"/>
+        <g transform="translate(277 64)"><rect class="icon" x="0" y="2" width="40" height="27" rx="3"/><path class="icon" d="M14 37h12M20 29v8M6 22l7-7 6 5 8-9 7 6"/></g>
+        <text class="t" x="327" y="70">Web HMI</text><text class="tag" x="463" y="70" text-anchor="end">HMI-01</text>
+        <text class="v" x="327" y="88" id="v-hmi1">--</text><text class="v" x="327" y="103" id="v-hmi2">--</text>
       </g>
-
-      <!-- outdoor condensing unit -->
-      <g>
-        <path class="heat" d="M520 140 q6 -8 0 -16 q-6 -8 0 -16" fill="none" stroke="#ffb547" stroke-width="2" stroke-linecap="round"/>
-        <path class="heat" d="M545 140 q6 -8 0 -16 q-6 -8 0 -16" fill="none" stroke="#ffb547" stroke-width="2" stroke-linecap="round"/>
-        <path class="heat" d="M570 140 q6 -8 0 -16 q-6 -8 0 -16" fill="none" stroke="#ffb547" stroke-width="2" stroke-linecap="round"/>
+      <g class="node" id="n-plc">
+        <rect class="box" x="265" y="158" width="210" height="72" rx="12"/>
+        <g transform="translate(277 174)"><rect class="icon" x="2" y="0" width="36" height="40" rx="3"/><path class="icon" d="M14 0v40M26 0v40"/><circle class="led" id="plc-run" cx="8" cy="8" r="2.6" fill="#3a4663"/><circle class="led" id="plc-err" cx="8" cy="16" r="2.6" fill="#3a4663"/><path class="icon" d="M18 8h4M18 14h4M18 20h4M30 8h4M30 14h4M30 20h4"/></g>
+        <text class="t" x="327" y="180">PLC</text><text class="tag" x="463" y="180" text-anchor="end">PLC-01</text>
+        <text class="v" x="327" y="198" id="v-plc1">--</text><text class="v" x="327" y="213" id="v-plc2">--</text>
       </g>
-      <rect x="496" y="224" width="12" height="6" fill="#3a4663"/><rect x="628" y="224" width="12" height="6" fill="#3a4663"/>
-      <rect x="490" y="148" width="160" height="78" rx="8" fill="#c9d4ee" stroke="rgba(255,255,255,.6)"/>
-      <circle cx="545" cy="187" r="31" fill="#1a2238" stroke="#8b97b5" stroke-width="2"/>
-      <g id="odu-fan" fill="#8fa3cc">
-        <circle cx="545" cy="187" r="5"/>
-        <path d="M545 182c-3-12 3-22 10-21s4 13-5 21z"/>
-        <path d="M545 182c-3-12 3-22 10-21s4 13-5 21z" transform="rotate(120 545 187)"/>
-        <path d="M545 182c-3-12 3-22 10-21s4 13-5 21z" transform="rotate(240 545 187)"/>
+      <g class="node" id="n-tic">
+        <rect class="box" x="580" y="158" width="210" height="72" rx="12"/>
+        <g transform="translate(592 174)"><circle class="isa" cx="20" cy="20" r="19"/><line x1="1" y1="20" x2="39" y2="20" stroke="#9fb6ff" stroke-width="1.6"/><text class="isa-t" x="20" y="16">TIC</text><text class="isa-t" x="20" y="33">01</text></g>
+        <text class="t" x="642" y="180">Temp control</text><text class="tag" x="778" y="180" text-anchor="end">TIC-01</text>
+        <text class="v" x="642" y="198" id="v-tic1">--</text><text class="v" x="642" y="213" id="v-tic2">--</text>
       </g>
-      <g stroke="#8b97b5" stroke-width="2"><line x1="545" y1="156" x2="545" y2="218"/><line x1="514" y1="187" x2="576" y2="187"/></g>
-      <g stroke="rgba(0,0,0,.25)" stroke-width="3">
-        <line x1="596" y1="160" x2="640" y2="160"/><line x1="596" y1="170" x2="640" y2="170"/>
-        <line x1="596" y1="180" x2="640" y2="180"/><line x1="596" y1="190" x2="640" y2="190"/>
-        <line x1="596" y1="200" x2="640" y2="200"/><line x1="596" y1="210" x2="640" y2="210"/>
+      <g class="node" id="n-tt">
+        <rect class="box" x="265" y="274" width="210" height="72" rx="12"/>
+        <g transform="translate(277 290)"><circle class="isa" cx="20" cy="20" r="19"/><text class="isa-t" x="20" y="16">TT</text><text class="isa-t" x="20" y="33">01</text></g>
+        <text class="t" x="327" y="296">Temp sensor</text><text class="tag" x="463" y="296" text-anchor="end">TT-01</text>
+        <text class="v" x="327" y="314" id="v-tt1">--</text><text class="v" x="327" y="329" id="v-tt2">--</text>
       </g>
-      <circle id="odu-led" cx="640" cy="217" r="3" fill="#3a4663"/>
-      <text class="lbl" x="490" y="104">Outdoor unit</text>
-      <text class="val" x="660" y="196" id="site-cool">--</text>
+      <g class="node" id="n-ac">
+        <rect class="box" x="580" y="274" width="210" height="72" rx="12"/>
+        <g transform="translate(592 290)"><rect class="icon" x="0" y="4" width="40" height="32" rx="4"/><circle class="icon" cx="15" cy="20" r="11"/><g id="ac-fan" fill="#9fb6ff"><circle cx="15" cy="20" r="2"/><path d="M15 18c-1-5 1-8 4-8s1 5-2 8z"/><path d="M15 18c-1-5 1-8 4-8s1 5-2 8z" transform="rotate(120 15 20)"/><path d="M15 18c-1-5 1-8 4-8s1 5-2 8z" transform="rotate(240 15 20)"/></g><path class="icon" d="M30 11h6M30 16h6M30 21h6M30 26h6"/><circle class="led" id="ac-led" cx="36" cy="32" r="1.8" fill="#3a4663"/></g>
+        <text class="t" x="642" y="296">AC unit</text><text class="tag" x="778" y="296" text-anchor="end">AC-01</text>
+        <text class="v" x="642" y="314" id="v-ac1">--</text><text class="v" x="642" y="329" id="v-ac2">--</text>
+      </g>
     </svg>
-    <div class="site-legend">
-      <div class="tile" id="s-idu"><i></i><span><b>Indoor unit</b><em id="st-idu">--</em></span></div>
-      <div class="tile cool" id="s-odu"><i></i><span><b>Outdoor unit</b><em id="st-odu">--</em></span></div>
-      <div class="tile cool" id="s-ref"><i></i><span><b>Refrigerant</b><em id="st-ref">--</em></span></div>
-      <div class="tile" id="s-sen"><i></i><span><b>Room sensor</b><em id="st-sen">--</em></span></div>
     </div>
   </section>
-
   <section class="card">
     <h2>Room climate <span id="mode-label">--</span></h2>
     <div class="thermo">
@@ -580,7 +562,7 @@ function render(s) {
   $('fan-icon').classList.toggle('off', !spinning);
   $('fan-blades').style.animationDuration = spinning ? `${1.6 / s.fan}s` : '0s';
 
-  renderSite(s);
+  renderTopo(s);
 
   const current = {mode: s.mode, fan: s.fan};
   document.querySelectorAll('button[data-tag]').forEach(b =>
@@ -588,25 +570,59 @@ function render(s) {
   setLink(true, `PLC online · ${plcLabel()} · scan ${s.scans}`);
 }
 
-function renderSite(s) {
-  const running = s.compressor, fanName = ['', 'low', 'med', 'high'][s.fan] || s.fan;
-  $('site').classList.toggle('is-on', s.power);
-  $('site').classList.toggle('is-running', running);
-  $('site-label').textContent = running ? 'cooling' : s.power ? 'fan only / idle' : 'standby';
-  $('site-temp').textContent = s.temperature.toFixed(1) + ' °C';
-  $('site-cool').textContent = running ? s.cooling + '%' : 'off';
-  // Room tint: cyan at or below setpoint, warming to red as it reaches the alarm limit.
-  const k = Math.min(1, Math.max(0, (s.temperature - s.setpoint) / Math.max(1, s.alarm_limit - s.setpoint)));
-  $('room-glow').style.fill = `rgba(${Math.round(59 + 196 * k)},${Math.round(232 - 155 * k)},${Math.round(255 - 146 * k)},.14)`;
-  $('odu-fan').style.animationDuration = running ? `${Math.max(.15, 1.2 - s.cooling / 100)}s` : '0s';
-  $('odu-led').setAttribute('fill', running ? '#3cf0a0' : '#3a4663');
-  $('idu-led').setAttribute('fill', s.power ? '#3be8ff' : '#3a4663');
-  $('sensor-dot').setAttribute('fill', s.sensor_fault ? '#ff4d6d' : '#3cf0a0');
-  setTile('s-idu', s.power, 'st-idu', `on · fan ${fanName}`, 'off');
-  setTile('s-odu', running, 'st-odu', `compressor ${s.cooling}%`, 'idle');
-  setTile('s-ref', running, 'st-ref', 'circulating', 'stopped');
-  $('s-sen').classList.toggle('alarm', s.sensor_fault);
-  setTile('s-sen', true, 'st-sen', s.sensor_fault ? 'COMM FAULT' : `ok · ${s.humidity.toFixed(0)} %RH`, '');
+function setNode(id, cls) { $(id).setAttribute('class', 'node ' + cls); }
+function setLinkState(id, cls, pktCls, on) {
+  $(id).setAttribute('class', $(id).getAttribute('class').replace(/ (ok|bad)$/, '') + (cls ? ' ' + cls : ''));
+  document.querySelectorAll('.' + pktCls).forEach(p => p.classList.toggle('on', on));
+}
+
+function renderTopo(s) {
+  const fan = ['', 'low', 'med', 'high'][s.fan] || s.fan, sens = !s.sensor_fault;
+  $('topo-label').textContent = s.alarm ? 'high temp alarm' : s.sensor_fault ? 'sensor comm fault'
+                              : s.compressor ? 'cooling' : s.power ? 'running' : 'standby';
+  setNode('n-hmi', 'ok');
+  $('v-hmi1').textContent = location.host;
+  $('v-hmi2').textContent = 'poll 1 s · FC01-06';
+  setNode('n-plc', s.alarm ? 'bad' : 'ok');
+  $('v-plc1').textContent = plcLabel();
+  $('v-plc2').textContent = `RUN · unit ${plc ? plc.unit : '-'} · scan ${s.scans}`;
+  $('plc-run').setAttribute('fill', '#3cf0a0'); $('plc-run').classList.add('on');
+  $('plc-err').setAttribute('fill', s.alarm || s.sensor_fault ? '#ff4d6d' : '#3a4663');
+  $('lbl-hmi').textContent = `Modbus TCP · ${plcLabel()}`;
+  setNode('n-tic', !s.power ? '' : s.alarm ? 'bad' : 'active');
+  $('v-tic1').textContent = `SP ${s.setpoint.toFixed(1)} · PV ${s.temperature.toFixed(1)} °C`;
+  $('v-tic2').textContent = s.power ? `${s.mode === 0 ? 'AUTO cool' : 'fan only'} · OUT ${s.cooling}%` : 'OFF';
+  setNode('n-tt', sens ? 'ok' : 'bad');
+  $('v-tt1').textContent = sens ? `${s.temperature.toFixed(1)} °C · ${s.humidity.toFixed(1)} %RH` : 'COMM FAULT';
+  $('v-tt2').textContent = s.alarm ? `HI alarm > ${s.alarm_limit.toFixed(0)} °C` : `HI limit ${s.alarm_limit.toFixed(0)} °C`;
+  setNode('n-ac', s.compressor ? 'active' : s.power ? 'ok' : '');
+  $('v-ac1').textContent = s.compressor ? `compressor ${s.cooling}%` : s.power ? 'compressor idle' : 'off';
+  $('v-ac2').textContent = s.power ? `fan ${fan}` : 'fan stopped';
+  $('ac-led').setAttribute('fill', s.compressor ? '#3cf0a0' : s.power ? '#ffb547' : '#3a4663');
+  $('ac-fan').style.animationDuration = s.power ? `${1.6 / s.fan}s` : '0s';
+  $('lbl-ac').textContent = `OUT ${s.cooling}%`;
+  setLinkState('l-hmi', 'ok', 'p-hmi', true);
+  setLinkState('l-tt', sens ? 'ok' : 'bad', 'p-tt', sens);
+  setLinkState('l-tic', s.power ? 'ok' : '', 'p-tic', s.power);
+  setLinkState('l-ac', s.compressor ? 'ok' : '', 'p-ac', s.compressor);
+}
+
+// PLC unreachable: the HMI link is down and nothing below it can be trusted.
+function topoOffline() {
+  $('topo-label').textContent = 'PLC offline';
+  setNode('n-hmi', 'ok'); setNode('n-plc', 'bad');
+  ['n-tic', 'n-tt', 'n-ac'].forEach(n => setNode(n, ''));
+  $('v-plc1').textContent = plcLabel();
+  $('v-plc2').textContent = 'NO RESPONSE';
+  $('plc-err').setAttribute('fill', '#ff4d6d');
+  $('ac-led').setAttribute('fill', '#3a4663');
+  $('lbl-ac').textContent = 'OUT --%';
+  $('plc-run').setAttribute('fill', '#3a4663'); $('plc-run').classList.remove('on');
+  $('lbl-hmi').textContent = `Modbus TCP · ${plcLabel()}`;
+  ['v-tic1', 'v-tic2', 'v-tt1', 'v-tt2', 'v-ac1', 'v-ac2'].forEach(v => $(v).textContent = '--');
+  $('ac-fan').style.animationDuration = '0s';
+  setLinkState('l-hmi', 'bad', 'p-hmi', false);
+  ['l-tt', 'l-tic', 'l-ac'].forEach(l => setLinkState(l, '', 'p-' + l.slice(2), false));
 }
 
 function setLink(online, text) {
@@ -722,6 +738,7 @@ async function refresh() {
     drawTrend();
   } catch (e) {
     setLink(false, 'PLC offline: ' + e.message);
+    topoOffline();
   }
   const t = await fetch('/api/traffic').then(r => r.json()).catch(() => []);
   $('traffic-count').textContent = t.length ? `latest ${t.length} requests` : '';

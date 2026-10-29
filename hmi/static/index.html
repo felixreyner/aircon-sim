@@ -291,6 +291,16 @@
       <circle class="pkt p-tic" r="3.5" fill="#9a6bff"><animateMotion dur="1.4s" begin="0s" repeatCount="indefinite" ><mpath href="#l-tic"/></animateMotion></circle>
       <circle class="pkt p-ac" r="3.5" fill="#3be8ff"><animateMotion dur="1s" begin="0s" repeatCount="indefinite" ><mpath href="#l-ac"/></animateMotion></circle>
 
+      <!-- firewall on the HMI to PLC conduit, shown when the HMI points at a non-default PLC -->
+      <g class="node" id="n-fw" style="display:none">
+        <rect class="box" x="270" y="157" width="150" height="36" rx="9"/>
+        <g transform="translate(280 166)">
+          <rect class="icon" x="0" y="0" width="22" height="18" rx="2"/>
+          <path class="icon" d="M0 6h22M0 12h22M7 0v6M15 6v6M7 12v6"/>
+        </g>
+        <text class="t" x="310" y="173" style="font-size:12px">FortiGate</text><text class="tag" x="410" y="173" text-anchor="end">FW-01</text>
+        <text class="tag" x="310" y="186" id="v-fw">--</text>
+      </g>
       <g class="node" id="n-hmi">
         <rect class="box" x="230" y="64" width="230" height="72" rx="12"/>
         <g transform="translate(242 80)"><rect class="icon" x="0" y="2" width="40" height="27" rx="3"/><path class="icon" d="M14 37h12M20 29v8M6 22l7-7 6 5 8-9 7 6"/></g>
@@ -440,6 +450,14 @@ function setLinkState(id, cls, pktCls, on) {
   document.querySelectorAll('.' + pktCls).forEach(p => p.classList.toggle('on', on));
 }
 
+// A PLC target other than the startup default is reached through the site firewall.
+function setFirewall(online) {
+  const d = plc && plc.default, show = !!d && (plc.host !== d.host || plc.port !== d.port || plc.unit !== d.unit);
+  $('n-fw').style.display = show ? '' : 'none';
+  if (show) { setNode('n-fw', online ? 'ok' : 'bad'); $('v-fw').textContent = online ? `allow ${plc.port}/tcp` : 'no reply'; }
+  $('lbl-hmi').setAttribute('x', show ? 430 : 355);
+}
+
 function renderTopo(s) {
   const fan = ['', 'low', 'med', 'high'][s.fan] || s.fan, sens = !s.sensor_fault;
   $('topo-label').textContent = s.alarm ? 'high temp alarm' : s.sensor_fault ? 'sensor comm fault'
@@ -466,6 +484,7 @@ function renderTopo(s) {
   $('ac-fan').style.animationDuration = s.power ? `${1.6 / s.fan}s` : '0s';
   $('lbl-ac').textContent = `OUT ${s.cooling}%`;
   setLinkState('l-hmi', 'ok', 'p-hmi', true);
+  setFirewall(true);
   setLinkState('l-tt', sens ? 'ok' : 'bad', 'p-tt', sens);
   setLinkState('l-tic', s.power ? 'ok' : '', 'p-tic', s.power);
   setLinkState('l-ac', s.compressor ? 'ok' : '', 'p-ac', s.compressor);
@@ -486,6 +505,7 @@ function topoOffline() {
   ['v-tic1', 'v-tic2', 'v-tt1', 'v-tt2', 'v-ac1', 'v-ac2'].forEach(v => $(v).textContent = '--');
   $('ac-fan').style.animationDuration = '0s';
   setLinkState('l-hmi', 'bad', 'p-hmi', false);
+  setFirewall(false);
   ['l-tt', 'l-tic', 'l-ac'].forEach(l => setLinkState(l, '', 'p-' + l.slice(2), false));
 }
 

@@ -25,6 +25,8 @@ connection pill in the top right corner, enter the host or IP, port and unit ID,
 press **Connect**. You can also paste an address like `modbus://192.168.1.50:502`
 into the host field. **Default** fills the form back in with the startup values.
 The change applies to every browser using that HMI and lasts until the HMI restarts.
+While the HMI points at a PLC other than the default, the system architecture diagram
+shows a FortiGate firewall (FW-01) on the HMI to PLC link, for a PLC reached across the site firewall.
 
 The same thing is available over HTTP: `GET /api/plc` returns the current target and
 `POST /api/plc` with `{"host": "...", "port": 502, "unit": 1}` switches to a new one.

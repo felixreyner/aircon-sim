@@ -220,6 +220,8 @@
   .topo .node.atkr .icon { stroke: #ff4d6d; }
   .topo .node.atkr .v { fill: #ffb3c0; }
   .topo .node.blocked rect.box { stroke: #ff4d6d; fill: #3a1828; animation: fwflash .35s 4; }
+  .topo .node.passed rect.box { stroke: var(--warn); fill: #3a2d14; }
+  .topo .node.passed .v { fill: #ffd591; }
   @keyframes fwflash { 50% { fill: #6e2236; } }
   #atk-path { fill: none; stroke: rgba(255, 77, 109, .6); stroke-width: 2; stroke-dasharray: 4 5; animation: dash 1s linear infinite; }
   @keyframes dash { to { stroke-dashoffset: -18; } }
@@ -230,6 +232,8 @@
     opacity: 0; transform: translateY(8px); transition: .3s; pointer-events: none;
   }
   #ips-toast.show { opacity: 1; transform: none; }
+  #ips-toast.ok { background: linear-gradient(90deg, rgba(60,240,160,.28), rgba(60,240,160,.08)); border-color: rgba(60,240,160,.5); color: #d5ffe9; }
+  #ips-toast.warn { background: linear-gradient(90deg, rgba(255,181,71,.3), rgba(255,181,71,.1)); border-color: rgba(255,181,71,.55); color: #ffe6bf; }
   #ips-toast b { color: #fff; }
   #ac-fan { transform-box: fill-box; transform-origin: center; animation: spin linear infinite; animation-duration: 0s; }
 
@@ -253,6 +257,9 @@
   tr.drop td { color: #ffb3c0; }
   td.fc.ips span { background: rgba(255, 77, 109, .22); color: var(--bad); }
   tr.drop td.v { color: var(--bad); }
+  tr.pass { background: rgba(255, 181, 71, .08) !important; }
+  tr.pass td { color: #ffd591; }
+  tr.pass td.fc.ips span { background: rgba(255, 181, 71, .22); color: var(--warn); }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 4px; }
 </style>
@@ -291,7 +298,7 @@
 
   <section class="card topo">
     <h2>System architecture
-      <button class="atk" id="attack-btn" hidden title="Simulate a malformed Modbus/TCP packet hitting the FortiGate IPS">⚡ Simulate attack</button>
+      <button class="atk" id="attack-btn" hidden title="Send one real malformed Modbus/TCP packet to the current PLC and report whether the FortiGate IPS blocks it">⚡ Send malformed packet</button>
       <span id="topo-label">--</span></h2>
     <div class="topo-scroll">
     <svg viewBox="0 0 820 480" role="img" aria-label="OT architecture: HMI, PLC, temperature control loop, temperature transmitter and AC unit inside the building">
@@ -510,41 +517,57 @@ function setFirewall(online) {
   $('attack-btn').hidden = !show;
 }
 
-// Demo of the FortiGate IPS: a rogue client sends a Modbus/TCP request whose MBAP
-// length does not match its PDU; FW-01 drops it and the PLC keeps running.
+// Real IPS probe: send one malformed Modbus/TCP frame to the current PLC and show
+// whether an in-path FortiGate drops it. How each real outcome reads on the page.
+const ATTACK_VIEW = {
+  reset:    {blocked: true,  fw: 'IPS · DROPPED',   verdict: 'Blocked', note: 'connection reset right after the frame — consistent with the FortiGate IPS dropping it.'},
+  closed:   {blocked: true,  fw: 'IPS · DROPPED',   verdict: 'Blocked', note: 'peer closed the connection with no reply — consistent with the FortiGate IPS dropping it.'},
+  timeout:  {blocked: true,  fw: 'IPS · NO ROUTE',  verdict: 'No connection', note: 'could not even open a TCP connection — the packet may be silently dropped upstream.'},
+  answered: {blocked: false, fw: 'IPS · PASSED',    verdict: 'NOT blocked', note: 'the PLC answered, so the malformed frame was not blocked in transit.'},
+  'no-reply':{blocked: false, fw: 'IPS · PASSED',   verdict: 'NOT blocked', note: 'no reset and no reply — the frame most likely reached the PLC, which is waiting for the bytes we promised.'},
+  refused:  {blocked: false, fw: 'IPS · REFUSED',   verdict: 'Refused', note: 'the target refused the TCP connection — nothing to test against on this port.'},
+  error:    {blocked: false, fw: 'IPS · ERROR',     verdict: 'Error', note: 'could not complete the probe.'},
+};
+
 let attackTimer = null;
 async function simulateAttack() {
   const btn = $('attack-btn');
   btn.disabled = true;
+  btn.textContent = '⚡ Sending…';
   try {
     const r = await fetch('/api/attack', {method: 'POST'});
     const res = await r.json();
-    if (!r.ok) throw new Error(res.detail);
+    if (!r.ok) throw new Error(res.detail || 'attack request failed');
+    const view = ATTACK_VIEW[res.outcome] || ATTACK_VIEW.error;
     clearTimeout(attackTimer);
+    // play the packet travelling to the firewall
     $('atk').style.display = '';
     $('atk-x').setAttribute('opacity', 0);
     $('atk-pkt').setAttribute('opacity', 1);
     $('atk-motion').beginElement();
     await new Promise(done => setTimeout(done, 1100));
-    $('atk-pkt').setAttribute('opacity', 0);
-    $('atk-x').setAttribute('opacity', 1);
-    $('n-fw').classList.add('blocked');
-    $('v-fw').textContent = 'IPS · DROPPED';
-    $('ips-toast').innerHTML = `⛔ <span><b>FortiGate IPS blocked ${res.signature}</b> · 10.10.2.66 → ${res.target} · action: drop · #${res.blocked}. PLC unaffected.</span>`;
-    $('ips-toast').classList.add('show');
+    $('atk-pkt').setAttribute('opacity', view.blocked ? 0 : 1);
+    $('atk-x').setAttribute('opacity', view.blocked ? 1 : 0);
+    $('n-fw').classList.toggle('blocked', view.blocked);
+    $('n-fw').classList.toggle('passed', !view.blocked);
+    $('v-fw').textContent = view.fw;
+    const resp = res.response_hex ? ` · reply ${res.response_hex}` : '';
+    $('ips-toast').className = 'show ' + (view.blocked ? 'ok' : 'warn');
+    $('ips-toast').innerHTML = `${view.blocked ? '🛡️' : '⚠️'} <span><b>${view.verdict}: ${res.signature}</b> · sent ${res.sent_bytes} B (MBAP len ${res.claimed_len}, real ${res.actual_len}) → ${res.target} · ${res.outcome} in ${res.elapsed_ms} ms${resp}. ${view.note}</span>`;
     refresh();
     attackTimer = setTimeout(() => {
       $('atk').style.display = 'none';
-      $('n-fw').classList.remove('blocked');
-      $('ips-toast').classList.remove('show');
+      $('n-fw').classList.remove('blocked', 'passed');
+      $('ips-toast').className = '';
       if (plc) $('v-fw').textContent = `allow ${plc.port}/tcp`;
-    }, 4500);
+    }, 7000);
   } catch (err) {
+    $('ips-toast').className = 'show warn';
     $('ips-toast').textContent = err.message;
-    $('ips-toast').classList.add('show');
-    attackTimer = setTimeout(() => $('ips-toast').classList.remove('show'), 3000);
+    attackTimer = setTimeout(() => $('ips-toast').className = '', 4000);
   } finally {
     btn.disabled = false;
+    btn.textContent = '⚡ Send malformed packet';
   }
 }
 $('attack-btn').onclick = simulateAttack;
@@ -717,9 +740,9 @@ async function refresh() {
   }
   const t = await fetch('/api/traffic').then(r => r.json()).catch(() => []);
   $('traffic-count').textContent = t.length ? `latest ${t.length} requests` : '';
-  $('traffic').innerHTML = t.map(m => m.blocked ? `<tr class="drop"><td>${m.seq}</td><td>${m.time}</td>
+  $('traffic').innerHTML = t.map(m => (m.blocked || m.live) ? `<tr class="${m.blocked ? 'drop' : 'pass'}"><td>${m.seq}</td><td>${m.time}</td>
     <td class="fc ips"><span>IPS</span></td><td>${m.name}</td><td>${m.address}</td><td>${m.count}</td>
-    <td class="v">BLOCKED · ${m.detail}</td></tr>` : `<tr><td>${m.seq}</td><td>${m.time}</td>
+    <td class="v">${m.blocked ? 'BLOCKED' : 'PASSED'} · ${m.detail}</td></tr>` : `<tr><td>${m.seq}</td><td>${m.time}</td>
     <td class="fc ${m.fc > 4 ? 'w' : ''}"><span>FC${String(m.fc).padStart(2, '0')}</span></td><td>${m.name}</td>
     <td>${m.address}</td><td>${m.count}</td><td class="v">[${m.values.join(', ')}]</td></tr>`).join('');
 }

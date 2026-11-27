@@ -134,25 +134,94 @@ async def set_plc(body: Target):
 SIGNATURE = "Modbus.TCP.Invalid.Packet.Length"
 
 
+# A deliberately malformed Modbus/TCP frame: the MBAP "length" field claims 253
+# bytes follow, but only the 6-byte unit+PDU below actually do. A conforming stack
+# never emits this; FortiGate's Modbus.TCP.Invalid.Packet.Length IPS signature is
+# meant to catch exactly this mismatch. Single probe, not a flood.
+BAD_MBAP_LENGTH = 253
+MALFORMED_FRAME = bytes([
+    0x00, 0x01,              # transaction id
+    0x00, 0x00,              # protocol id (Modbus)
+    (BAD_MBAP_LENGTH >> 8) & 0xFF, BAD_MBAP_LENGTH & 0xFF,  # length: LIES (claims 253)
+    0x01,                    # unit id
+    0x03,                    # function: read holding registers
+    0x00, 0x00,              # start address 0
+    0x00, 0x01,              # quantity 1
+])  # real bytes after the length field: 6, not 253
+ATTACK_TIMEOUT = 4.0
+
+
 @app.post("/api/attack")
 async def attack():
-    """Demo only: record a malformed Modbus/TCP request dropped by the FortiGate IPS.
+    """Send ONE real malformed Modbus/TCP frame to the current PLC target and report
+    what came back, to test whether an in-path IPS (e.g. FortiGate's
+    Modbus.TCP.Invalid.Packet.Length) actually drops it.
 
-    Nothing is sent on the wire. The FortiGate sits between the HMI and any
-    non-default PLC, so this logs what its IPS would show for a request whose
-    MBAP length field does not match the PDU it carries.
+    This genuinely opens a socket to target host:port and writes the frame. It is a
+    single probe against the operator-configured target, meant for a lab the operator
+    owns. The outcome is inferred from how the far side behaves:
+      refused   - TCP refused: nothing listening, or the firewall rejects the port.
+      reset     - connection reset right after our frame: consistent with an IPS drop.
+      closed    - peer sent FIN with no data after our frame: also consistent with a drop.
+      answered  - the PLC replied: the frame was NOT blocked in transit.
+      no-reply  - connected, no reset and no reply before timeout: not blocked by the
+                  firewall; a Modbus server waiting for the 253 bytes we promised looks
+                  like this, so the packet most likely reached the PLC.
+      timeout   - could not even connect within the timeout: likely silently dropped.
     """
     global seq, ips_blocked
-    if target == DEFAULT_TARGET:
-        raise HTTPException(409, "No FortiGate in the path: point the HMI at a non-default PLC first")
-    ips_blocked += 1
+    host, port = target["host"], target["port"]
+    start = time.monotonic()
+    outcome, detail, resp_hex = "error", "", ""
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, port), timeout=ATTACK_TIMEOUT)
+    except asyncio.TimeoutError:
+        outcome, detail = "timeout", f"no TCP connection to {host}:{port} within {ATTACK_TIMEOUT:.0f}s (dropped?)"
+    except ConnectionRefusedError:
+        outcome, detail = "refused", f"{host}:{port} refused the TCP connection"
+    except OSError as exc:
+        outcome, detail = "error", f"cannot reach {host}:{port}: {exc}"
+    else:
+        try:
+            writer.write(MALFORMED_FRAME)
+            await writer.drain()
+            remaining = ATTACK_TIMEOUT - (time.monotonic() - start)
+            data = await asyncio.wait_for(reader.read(260), timeout=max(0.5, remaining))
+            if data:
+                resp_hex = data.hex(" ")
+                outcome, detail = "answered", f"PLC replied with {len(data)} bytes (frame not blocked in transit)"
+            else:
+                outcome, detail = "closed", "peer closed the connection after our frame with no reply (consistent with an IPS drop)"
+        except asyncio.TimeoutError:
+            outcome, detail = "no-reply", "connected and sent, no reset and no reply before timeout (frame most likely reached the PLC)"
+        except ConnectionResetError:
+            outcome, detail = "reset", "connection reset right after our frame (consistent with an IPS drop)"
+        except OSError as exc:
+            outcome, detail = "error", f"socket error after send: {exc}"
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except OSError:
+                pass
+
+    blocked = outcome in ("reset", "closed", "timeout")
+    elapsed_ms = int((time.monotonic() - start) * 1000)
     seq += 1
+    if blocked:
+        ips_blocked += 1
     ips_log.appendleft({
         "seq": seq, "time": time.strftime("%H:%M:%S"), "fc": 3, "name": SIGNATURE,
-        "address": 0, "count": 1, "values": [], "blocked": True,
-        "detail": "MBAP length 253, PDU 5 bytes · dropped by FW-01",
+        "address": 0, "count": 1, "values": [], "blocked": blocked, "live": True,
+        "detail": f"{outcome.upper()} · {detail}",
     })
-    return {"signature": SIGNATURE, "blocked": ips_blocked, "target": f"{target['host']}:{target['port']}"}
+    return {
+        "signature": SIGNATURE, "target": f"{host}:{port}", "sent_bytes": len(MALFORMED_FRAME),
+        "frame_hex": MALFORMED_FRAME.hex(" "), "claimed_len": BAD_MBAP_LENGTH, "actual_len": 6,
+        "outcome": outcome, "detail": detail, "blocked": blocked, "response_hex": resp_hex,
+        "elapsed_ms": elapsed_ms, "blocked_count": ips_blocked,
+    }
 
 
 @app.get("/api/traffic")

@@ -299,6 +299,7 @@
   <section class="card topo">
     <h2>System architecture
       <button class="atk" id="attack-btn" hidden title="Send one real malformed Modbus/TCP packet to the current PLC and report whether the FortiGate IPS blocks it">⚡ Send malformed packet</button>
+      <button class="atk" id="exc-btn" hidden title="Provoke a burst of Illegal Function exception responses from the PLC and report whether the FortiGate from-server rate signature (3 in 60s) blocks them">⚡ Trigger exception rate</button>
       <span id="topo-label">--</span></h2>
     <div class="topo-scroll">
     <svg viewBox="0 0 820 480" role="img" aria-label="OT architecture: HMI, PLC, temperature control loop, temperature transmitter and AC unit inside the building">
@@ -515,6 +516,7 @@ function setFirewall(online) {
   }
   $('lbl-hmi').setAttribute('x', show ? 430 : 355);
   $('attack-btn').hidden = !show;
+  $('exc-btn').hidden = !show;
 }
 
 // Real IPS probe: send one malformed Modbus/TCP frame to the current PLC and show
@@ -573,6 +575,60 @@ async function simulateAttack() {
   }
 }
 $('attack-btn').onclick = simulateAttack;
+
+// Second IPS test: the --flow from_server / --src_port 502 rate signature. It matches the
+// PLC's RESPONSES, not the client's requests, so we provoke a burst of Illegal Function
+// exception replies and judge whether they crossed the firewall or were cut off at the rate.
+const EXC_VIEW = {
+  dropped:     {blocked: true,  fw: 'IPS · RATE DROP', verdict: 'Blocked', note: 'the PLC\'s first exception replies came back, then later ones were dropped — consistent with the FortiGate from-server rate signature firing and cutting off the responses.'},
+  passed:      {blocked: false, fw: 'IPS · PASSED',    verdict: 'NOT blocked', note: 'enough Illegal Function exception replies came back to satisfy the 3-in-60s rate, and none were dropped — the firewall either only logs this, or the signature is not on this path.'},
+  partial:     {blocked: false, fw: 'IPS · BELOW RATE', verdict: 'Below threshold', note: 'fewer exception replies came back than the rate threshold, so the signature would not have fired. Retry to send the full burst.', amber: true},
+  unreachable: {blocked: false, fw: 'IPS · NO TEST',   verdict: 'Can\'t test', note: 'the PLC sent no exception replies — it is unreachable, the target is wrong, or even benign Modbus is blocked. Fix the connection, then retry.', amber: true},
+  error:       {blocked: false, fw: 'IPS · ERROR',     verdict: 'Error', note: 'could not complete the scan.', amber: true},
+};
+
+let excTimer = null;
+async function runExceptionScan() {
+  const btn = $('exc-btn');
+  btn.disabled = true;
+  btn.textContent = '⚡ Provoking…';
+  try {
+    const r = await fetch('/api/exception-scan', {method: 'POST'});
+    const res = await r.json();
+    if (!r.ok) throw new Error(res.detail || 'exception scan failed');
+    const view = EXC_VIEW[res.outcome] || EXC_VIEW.error;
+    clearTimeout(excTimer);
+    // play a packet crossing the firewall (here it stands for the PLC's response stream)
+    $('atk').style.display = '';
+    $('atk-x').setAttribute('opacity', 0);
+    $('atk-pkt').setAttribute('opacity', 1);
+    $('atk-motion').beginElement();
+    await new Promise(done => setTimeout(done, 1100));
+    $('atk-pkt').setAttribute('opacity', view.blocked ? 0 : 1);
+    $('atk-x').setAttribute('opacity', view.blocked ? 1 : 0);
+    $('n-fw').classList.toggle('blocked', view.blocked);
+    $('n-fw').classList.toggle('passed', !view.blocked);
+    $('v-fw').textContent = view.fw;
+    const sample = res.sample_hex ? ` · reply ${res.sample_hex}` : '';
+    $('ips-toast').className = 'show ' + (view.blocked ? 'ok' : (view.amber ? 'warn' : 'warn'));
+    $('ips-toast').innerHTML = `${view.blocked ? '🛡️' : '⚠️'} <span><b>${view.verdict}: ${res.signature}</b> · sent ${res.sent} illegal-function requests (FC 0x${res.bad_function.toString(16)}), ${res.matched} exception replies, rate ${res.rate_count}/${res.rate_window}s → ${res.target} · ${res.outcome} in ${res.elapsed_ms} ms${sample}. ${view.note}</span>`;
+    refresh();
+    excTimer = setTimeout(() => {
+      $('atk').style.display = 'none';
+      $('n-fw').classList.remove('blocked', 'passed');
+      $('ips-toast').className = '';
+      if (plc) $('v-fw').textContent = `allow ${plc.port}/tcp`;
+    }, 7000);
+  } catch (err) {
+    $('ips-toast').className = 'show warn';
+    $('ips-toast').textContent = err.message;
+    excTimer = setTimeout(() => $('ips-toast').className = '', 4000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⚡ Trigger exception rate';
+  }
+}
+$('exc-btn').onclick = runExceptionScan;
 
 function renderTopo(s) {
   const fan = ['', 'low', 'med', 'high'][s.fan] || s.fan, sens = !s.sensor_fault;

@@ -63,6 +63,42 @@ When the probe is Blocked, FW-01 flashes red and a red `IPS` row is pinned to th
 traffic log; otherwise the row and the firewall are shown amber. The latest 5 probe results are
 kept, and they reset when the PLC target changes.
 
+### Triggering the from-server exception-rate signature
+
+A second signature keys on traffic *from* the PLC rather than the client's request. It is a
+`--flow from_server` / `--src_port 502` rule with a rate threshold, matching the PLC's own
+**Illegal Function** exception replies:
+
+```
+--flow from_server; --pattern "|00 00|"; --context body; --distance 2,context; --within 2,context;
+--byte_test 1,>,127,7; --pattern "|01|"; --context body; --distance 8,context; --within 1,context;
+--rate 3,60; --track SRC_IP
+```
+
+`byte_test 1,>,127,7` says byte 7 of the reply (the function code) has its high bit set, i.e.
+it is an exception response (`FC | 0x80`); `pattern "|01|"` at offset 8 is exception code `01`
+(Illegal Function); and `--rate 3,60 --track SRC_IP` fires only on **3 such replies from one
+source within 60 s**. So a single request can't trip it — the firewall has to see a burst of
+exception responses coming back.
+
+The **Trigger exception rate** button (next to **Send malformed packet**, shown only while the
+FortiGate is in the path) provokes exactly that. `POST /api/exception-scan` sends a short burst
+of **well-formed** requests that each carry an unsupported function code (`FC 0x64`):
+`00 3N 00 00 00 02 01 64`. The length field is correct, so these do **not** trip the
+invalid-length signature; but the PLC can't service the function, so it answers each with an
+Illegal Function exception — `00 00 00 00 00 03 01 a8 01` — which is the reply the signature
+matches. Four are sent, one past the 3-in-60 s threshold.
+
+| Outcome | Meaning |
+|---|---|
+| `passed` | at least 3 exception replies came back and none were dropped — the rate condition is satisfied and the firewall did **not** drop the PLC's responses (it only logs this, or the signature is not on this path): **not blocked** |
+| `dropped` | the first exception replies came back, then later ones got no reply — consistent with the IPS cutting off the PLC's responses once the rate fired: **Blocked** |
+| `partial` | fewer exception replies came back than the threshold, so the signature would not have fired — retry to send the full burst |
+| `unreachable` | the PLC sent no exception replies at all — can't test (PLC down, wrong target, or even benign Modbus blocked) |
+
+The firewall and the pinned `IPS` row follow the same red/amber convention as the malformed-packet
+probe. Like that probe, this is a handful of single requests meant for a lab you own, not a flood.
+
 The same thing is available over HTTP: `GET /api/plc` returns the current target and
 `POST /api/plc` with `{"host": "...", "port": 502, "unit": 1}` switches to a new one.
 

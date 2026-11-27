@@ -274,6 +274,126 @@ async def attack():
     }
 
 
+# --- Second IPS signature: an exception-response rate match on traffic FROM the PLC ---
+#
+# The operator's other FortiGate signature is a --flow from_server / --src_port 502 rule:
+# it watches the *responses* the PLC sends back, not the client's requests, and fires on a
+# rate of 3 in 60s per source IP. The response bytes it keys on:
+#   pattern |00 00| at body offset 2  -> the MBAP protocol-id of a Modbus reply
+#   byte_test 1,>,127,7               -> byte 7 (the function code) has its high bit set,
+#                                        i.e. it is an EXCEPTION response (FC | 0x80)
+#   pattern |01| at body offset 8     -> exception code 0x01 = Illegal Function
+#   rate 3,60 ; track SRC_IP          -> 3 such replies from one source within 60s
+#
+# To provoke matching server-side traffic we send a small burst of WELL-FORMED requests that
+# each carry an unsupported function code (0x64). The frames are valid in length (so they do
+# NOT trip the invalid-length signature), but the PLC can't service the function, so it
+# answers each with an "Illegal Function" exception -> exactly the reply the signature keys
+# on. Three good exception replies inside the window satisfy the rate condition.
+EXC_SIGNATURE = "Modbus.TCP.Illegal.Function.Exception.Rate"
+EXC_RATE_COUNT = 3            # the signature's rate: N replies ...
+EXC_RATE_WINDOW = 60         # ... within this many seconds
+EXC_BURST = 4                # requests we send (one past the threshold, to cross it)
+BAD_FUNCTION = 0x64          # an unsupported Modbus function code
+
+
+def _illegal_function_frame(tid):
+    """A well-formed Modbus/TCP request carrying an unsupported function code."""
+    return bytes([
+        (tid >> 8) & 0xFF, tid & 0xFF,   # transaction id
+        0x00, 0x00,                      # protocol id
+        0x00, 0x02,                      # length: 2 bytes follow (unit + function) -> well-formed
+        0x01,                            # unit id
+        BAD_FUNCTION,                    # unsupported function code
+    ])
+
+
+def _matches_exception_signature(resp):
+    """True if resp is the exception reply the from_server signature keys on:
+    protocol-id 00 00 at offset 2, function byte (offset 7) high-bit set, exc code 0x01 at offset 8."""
+    return (len(resp) >= 9 and resp[2] == 0x00 and resp[3] == 0x00
+            and resp[7] > 127 and resp[8] == 0x01)
+
+
+@app.post("/api/exception-scan")
+async def exception_scan():
+    """Provoke the PLC into emitting a burst of 'Illegal Function' exception responses to
+    test the operator's --flow from_server / --src_port 502 rate signature (3 in 60s).
+
+    Unlike the single malformed-frame probe, this signature matches the PLC's *responses*,
+    so the test has to make the PLC actually send matching replies. We send a short burst of
+    well-formed requests with an unsupported function code; each should come back as an
+    Illegal Function exception. Then we judge:
+
+      not-blocked : at least EXC_RATE_COUNT matching exception replies came back -> the rate
+                    condition is satisfied and the firewall did NOT drop the responses
+                    (either it only logs, or the signature isn't deployed on this path).
+      blocked     : the first replies came back but later ones were dropped/reset after the
+                    threshold -> consistent with the IPS dropping the PLC's responses once
+                    the rate fired.
+      unreachable : no exception replies at all -> can't test (PLC down, wrong target, or
+                    even benign Modbus blocked).
+    """
+    global seq, ips_blocked
+    host, port = target["host"], target["port"]
+    start = time.monotonic()
+
+    results = []          # per-request probe kind
+    matched = 0           # replies matching the signature
+    dropped_after = 0     # non-answers that came AFTER we'd already seen a reply
+    sample_hex = ""
+    for i in range(EXC_BURST):
+        kind, detail, resp = await _probe(host, port, _illegal_function_frame(0x30 + i),
+                                           read_timeout=2.0)
+        is_match = kind == "answered" and _matches_exception_signature(resp)
+        if is_match:
+            matched += 1
+            if not sample_hex:
+                sample_hex = resp.hex(" ")
+        elif kind in ("no-reply", "reset", "closed") and matched > 0:
+            dropped_after += 1
+        results.append(kind)
+
+    any_reply = matched > 0
+    met_rate = matched >= EXC_RATE_COUNT
+
+    if not any_reply:
+        outcome, blocked, detail = "unreachable", False, (
+            f"no Illegal Function exception replies from {host}:{port} "
+            f"({', '.join(results)}); can't test the from_server signature")
+    elif met_rate and dropped_after == 0:
+        outcome, blocked, detail = "passed", False, (
+            f"{matched} Illegal Function exception replies in {EXC_BURST} requests -- the "
+            f"rate condition ({EXC_RATE_COUNT} in {EXC_RATE_WINDOW}s) is satisfied and the "
+            "replies were NOT dropped in transit (firewall logs only, or signature not on this path)")
+    elif dropped_after > 0:
+        outcome, blocked, detail = "dropped", True, (
+            f"{matched} exception replies came back, then {dropped_after} later one(s) were "
+            f"dropped/reset -- consistent with the IPS cutting off the PLC's responses once the "
+            f"{EXC_RATE_COUNT}-in-{EXC_RATE_WINDOW}s rate fired")
+    else:
+        outcome, blocked, detail = "partial", False, (
+            f"only {matched} exception reply(ies) came back -- below the rate threshold of "
+            f"{EXC_RATE_COUNT}, so the signature would not have fired")
+
+    elapsed_ms = int((time.monotonic() - start) * 1000)
+    seq += 1
+    if blocked:
+        ips_blocked += 1
+    ips_log.appendleft({
+        "seq": seq, "time": time.strftime("%H:%M:%S"), "fc": BAD_FUNCTION, "name": EXC_SIGNATURE,
+        "address": 0, "count": EXC_BURST, "values": [], "blocked": blocked, "live": True,
+        "detail": f"{outcome.upper()} · {detail}",
+    })
+    return {
+        "signature": EXC_SIGNATURE, "target": f"{host}:{port}", "sent": EXC_BURST,
+        "bad_function": BAD_FUNCTION, "rate_count": EXC_RATE_COUNT, "rate_window": EXC_RATE_WINDOW,
+        "matched": matched, "dropped_after": dropped_after, "met_rate": met_rate,
+        "outcome": outcome, "detail": detail, "blocked": blocked, "sample_hex": sample_hex,
+        "results": results, "elapsed_ms": elapsed_ms, "blocked_count": ips_blocked,
+    }
+
+
 @app.get("/api/traffic")
 async def get_traffic():
     return list(ips_log) + list(traffic)

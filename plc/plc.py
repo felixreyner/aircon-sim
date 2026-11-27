@@ -50,7 +50,7 @@ log = logging.getLogger("plc")
 store = ModbusSlaveContext(
     co=ModbusSequentialDataBlock(1, [1] + [0] * 9),
     di=ModbusSequentialDataBlock(1, [0] * 10),
-    hr=ModbusSequentialDataBlock(1, [240, 0, 2, 320] + [0] * 6),
+    hr=ModbusSequentialDataBlock(1, [200, 0, 2, 320] + [0] * 6),
     ir=ModbusSequentialDataBlock(1, [0] * 10),
 )
 context = ModbusServerContext(slaves={UNIT: store}, single=False)

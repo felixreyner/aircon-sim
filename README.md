@@ -152,7 +152,7 @@ Temperatures are scaled by 10 (`245` = 24.5 °C) and signed 16-bit.
 | Discrete input | 0 | Compressor running | R | |
 | Discrete input | 1 | High temperature alarm | R | room temp > alarm limit |
 | Discrete input | 2 | Sensor comm fault | R | PLC can't reach the sensor |
-| Holding register | 0 | Setpoint | R/W | °C x10, default 240 |
+| Holding register | 0 | Setpoint | R/W | °C x10, default 200 |
 | Holding register | 1 | Mode | R/W | 0 = cool, 1 = fan only |
 | Holding register | 2 | Fan speed | R/W | 1 to 3 |
 | Holding register | 3 | Alarm limit | R/W | °C x10, default 320 |

@@ -156,65 +156,105 @@ MALFORMED_FRAME = bytes([
 # bytes after the length field: 8 actual vs 6 declared, so 2 bytes sit beyond the
 # point the length field claims the message ends.
 TRAILING_BYTES = len(MALFORMED_FRAME) - 6 - DECLARED_LENGTH
+
+# A well-formed FC03 read-holding-registers request (length field matches the 6 bytes
+# that follow, no trailing). It does NOT trip the signature, so an in-path IPS lets it
+# through. We send it first to prove the PLC is reachable and answering; only then can a
+# silent no-reply to the malformed frame be read as "dropped in transit" rather than
+# "PLC busy / unreachable".
+BASELINE_FRAME = bytes([
+    0x00, 0x02, 0x00, 0x00, 0x00, 0x06, 0x01, 0x03, 0x00, 0x00, 0x00, 0x01,
+])
 ATTACK_TIMEOUT = 4.0
 
 
-@app.post("/api/attack")
-async def attack():
-    """Send ONE real malformed Modbus/TCP frame to the current PLC target and report
-    what came back, to test whether an in-path IPS (e.g. FortiGate's
-    Modbus.TCP.Invalid.Packet.Length) actually drops it.
+async def _probe(host, port, frame, read_timeout):
+    """Open a fresh TCP connection, send one frame and read one reply.
 
-    This genuinely opens a socket to target host:port and writes the frame. It is a
-    single probe against the operator-configured target, meant for a lab the operator
-    owns. The outcome is inferred from how the far side behaves:
-      refused   - TCP refused: nothing listening, or the firewall rejects the port.
-      reset     - connection reset right after our frame: consistent with an IPS drop.
-      closed    - peer sent FIN with no data after our frame: also consistent with a drop.
-      answered  - the PLC replied: the frame was NOT blocked in transit.
-      no-reply  - connected, no reset and no reply before timeout: not blocked by the
-                  firewall; a Modbus server waiting for the 253 bytes we promised looks
-                  like this, so the packet most likely reached the PLC.
-      timeout   - could not even connect within the timeout: likely silently dropped.
+    Returns (kind, detail, response_bytes). kind is one of:
+      refused / connect-timeout / error - never reached the point of a reply.
+      reset / closed                     - peer reset or closed after our frame.
+      answered                           - got bytes back.
+      no-reply                           - connected and sent, but no reply before timeout.
     """
-    global seq, ips_blocked
-    host, port = target["host"], target["port"]
-    start = time.monotonic()
-    outcome, detail, resp_hex = "error", "", ""
     try:
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection(host, port), timeout=ATTACK_TIMEOUT)
     except asyncio.TimeoutError:
-        outcome, detail = "timeout", f"no TCP connection to {host}:{port} within {ATTACK_TIMEOUT:.0f}s (dropped?)"
+        return "connect-timeout", f"no TCP connection to {host}:{port} within {ATTACK_TIMEOUT:.0f}s", b""
     except ConnectionRefusedError:
-        outcome, detail = "refused", f"{host}:{port} refused the TCP connection"
+        return "refused", f"{host}:{port} refused the TCP connection", b""
     except OSError as exc:
-        outcome, detail = "error", f"cannot reach {host}:{port}: {exc}"
-    else:
+        return "error", f"cannot reach {host}:{port}: {exc}", b""
+    try:
+        writer.write(frame)
+        await writer.drain()
+        data = await asyncio.wait_for(reader.read(260), timeout=read_timeout)
+        if data:
+            return "answered", f"replied with {len(data)} bytes", data
+        return "closed", "peer closed the connection with no reply", b""
+    except asyncio.TimeoutError:
+        return "no-reply", "connected and sent, but no reply before timeout", b""
+    except ConnectionResetError:
+        return "reset", "connection reset right after the frame", b""
+    except OSError as exc:
+        return "error", f"socket error after send: {exc}", b""
+    finally:
+        writer.close()
         try:
-            writer.write(MALFORMED_FRAME)
-            await writer.drain()
-            remaining = ATTACK_TIMEOUT - (time.monotonic() - start)
-            data = await asyncio.wait_for(reader.read(260), timeout=max(0.5, remaining))
-            if data:
-                resp_hex = data.hex(" ")
-                outcome, detail = "answered", f"PLC replied with {len(data)} bytes (frame not blocked in transit)"
-            else:
-                outcome, detail = "closed", "peer closed the connection after our frame with no reply (consistent with an IPS drop)"
-        except asyncio.TimeoutError:
-            outcome, detail = "no-reply", "connected and sent, no reset and no reply before timeout (frame most likely reached the PLC)"
-        except ConnectionResetError:
-            outcome, detail = "reset", "connection reset right after our frame (consistent with an IPS drop)"
-        except OSError as exc:
-            outcome, detail = "error", f"socket error after send: {exc}"
-        finally:
-            writer.close()
-            try:
-                await writer.wait_closed()
-            except OSError:
-                pass
+            await writer.wait_closed()
+        except OSError:
+            pass
 
-    blocked = outcome in ("reset", "closed", "timeout")
+
+@app.post("/api/attack")
+async def attack():
+    """Test whether an in-path IPS (e.g. FortiGate's Modbus.TCP.Invalid.Packet.Length)
+    drops a malformed Modbus/TCP frame sent to the current PLC target.
+
+    Two real probes against the operator-configured target, meant for a lab the operator
+    owns. First a WELL-FORMED request, to prove the PLC is reachable and answering and that
+    benign Modbus passes the firewall; then the MALFORMED frame. Comparing the two removes
+    the ambiguity that bit the earlier version: the malformed frame declares a length of 6,
+    which is itself a complete valid request, so a reachable PLC answers it -- therefore a
+    *silent* no-reply to the malformed frame (while the baseline was answered) means it was
+    dropped in transit, i.e. BLOCKED, not "reached the PLC".
+
+      blocked (reset / closed / dropped) - firewall reset, closed, or silently dropped the
+                                           malformed frame while the baseline got through.
+      passed                             - the PLC answered the malformed frame too: NOT blocked.
+      unreachable                        - the baseline itself got no answer: can't test
+                                           (PLC down, wrong target, or benign Modbus blocked).
+    """
+    global seq, ips_blocked
+    host, port = target["host"], target["port"]
+    start = time.monotonic()
+
+    base_kind, base_detail, _ = await _probe(host, port, BASELINE_FRAME, read_timeout=2.0)
+    base_ok = base_kind == "answered"
+
+    if not base_ok:
+        outcome, blocked, detail = "unreachable", False, (
+            f"baseline valid request to {host}:{port} was not answered ({base_kind}: {base_detail}); "
+            "cannot tell a block from an unreachable PLC")
+        mal_kind, mal_detail, resp = "skipped", "not sent (baseline failed)", b""
+    else:
+        mal_kind, mal_detail, resp = await _probe(host, port, MALFORMED_FRAME, read_timeout=2.5)
+        if mal_kind == "answered":
+            outcome, blocked, detail = "passed", False, (
+                "baseline was answered AND the malformed frame was answered too -- not blocked in transit")
+        elif mal_kind in ("reset", "closed"):
+            outcome, blocked, detail = mal_kind, True, (
+                f"baseline was answered, but the malformed frame -> {mal_kind}: {mal_detail} "
+                "(consistent with an IPS drop)")
+        elif mal_kind == "no-reply":
+            outcome, blocked, detail = "dropped", True, (
+                "baseline valid request was answered, but the malformed frame got no reply -- "
+                "silently dropped in transit (a reachable PLC would have answered it)")
+        else:
+            outcome, blocked, detail = mal_kind, False, f"malformed probe: {mal_detail}"
+
+    resp_hex = resp.hex(" ")
     elapsed_ms = int((time.monotonic() - start) * 1000)
     seq += 1
     if blocked:
@@ -226,7 +266,9 @@ async def attack():
     })
     return {
         "signature": SIGNATURE, "target": f"{host}:{port}", "sent_bytes": len(MALFORMED_FRAME),
-        "frame_hex": MALFORMED_FRAME.hex(" "), "declared_len": DECLARED_LENGTH, "actual_after_len": len(MALFORMED_FRAME) - 6, "trailing_bytes": TRAILING_BYTES,
+        "frame_hex": MALFORMED_FRAME.hex(" "), "declared_len": DECLARED_LENGTH,
+        "actual_after_len": len(MALFORMED_FRAME) - 6, "trailing_bytes": TRAILING_BYTES,
+        "baseline_ok": base_ok, "baseline_outcome": base_kind, "malformed_outcome": mal_kind,
         "outcome": outcome, "detail": detail, "blocked": blocked, "response_hex": resp_hex,
         "elapsed_ms": elapsed_ms, "blocked_count": ips_blocked,
     }

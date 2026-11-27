@@ -44,19 +44,24 @@ The frame is shaped to trip this custom FortiGate IPS signature (service MODBUS)
 
 The `00 00` protocol-id sits at body offset 2 (`--distance 2 --within 2`); `--byte_jump`
 advances by the declared length field, and `--data_at 0,relative` then finds the 2 trailing
-bytes that a conforming frame would not have. The HMI reports the outcome:
+bytes that a conforming frame would not have.
+
+Because the malformed frame declares a length of 6 — which is itself a complete, valid FC03
+request — a *reachable* PLC actually answers it. So the probe runs in **two phases**: it first
+sends a well-formed FC03 (which does not trip the signature, so the firewall lets it through)
+to confirm the PLC is reachable and answering, then sends the malformed frame and judges it
+against that baseline:
 
 | Outcome | Meaning |
 |---|---|
-| `reset` / `closed` | the connection was reset or closed right after the frame — consistent with an IPS drop (shown as **Blocked**) |
-| `timeout` | could not open a TCP connection at all — possibly dropped upstream |
-| `answered` | the PLC replied — the frame was **not** blocked in transit |
-| `no-reply` | connected, no reset and no reply before the timeout — the frame most likely reached the PLC (**not blocked**) |
-| `refused` | the target refused the TCP connection |
+| `dropped` | baseline answered, but the malformed frame got **no reply** — silently dropped in transit. A reachable PLC would have answered it, so this is a **Blocked** (this is how a FortiGate IPS drop usually looks: the TCP handshake completes, then the offending payload is dropped with no RST) |
+| `reset` / `closed` | baseline answered, but the malformed frame reset or closed the connection — **Blocked** |
+| `passed` | the PLC answered the malformed frame too — **not blocked** |
+| `unreachable` | the baseline request itself got no answer — can't test (PLC down, wrong target, or even benign Modbus blocked) |
 
-When the firewall drops it, FW-01 flashes red and a red `IPS` row is pinned to the top of the
-traffic log; when it gets through, the row and the firewall are shown amber. The latest 5 probe
-results are kept, and they reset when the PLC target changes.
+When the probe is Blocked, FW-01 flashes red and a red `IPS` row is pinned to the top of the
+traffic log; otherwise the row and the firewall are shown amber. The latest 5 probe results are
+kept, and they reset when the PLC target changes.
 
 The same thing is available over HTTP: `GET /api/plc` returns the current target and
 `POST /api/plc` with `{"host": "...", "port": 502, "unit": 1}` switches to a new one.

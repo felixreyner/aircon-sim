@@ -519,14 +519,16 @@ function setFirewall(online) {
 
 // Real IPS probe: send one malformed Modbus/TCP frame to the current PLC and show
 // whether an in-path FortiGate drops it. How each real outcome reads on the page.
+// Outcomes come from the two-phase probe: a valid baseline request proves the PLC is
+// reachable, then the malformed frame is judged against it.
 const ATTACK_VIEW = {
-  reset:    {blocked: true,  fw: 'IPS · DROPPED',   verdict: 'Blocked', note: 'connection reset right after the frame — consistent with the FortiGate IPS dropping it.'},
-  closed:   {blocked: true,  fw: 'IPS · DROPPED',   verdict: 'Blocked', note: 'peer closed the connection with no reply — consistent with the FortiGate IPS dropping it.'},
-  timeout:  {blocked: true,  fw: 'IPS · NO ROUTE',  verdict: 'No connection', note: 'could not even open a TCP connection — the packet may be silently dropped upstream.'},
-  answered: {blocked: false, fw: 'IPS · PASSED',    verdict: 'NOT blocked', note: 'the PLC answered, so the malformed frame was not blocked in transit.'},
-  'no-reply':{blocked: false, fw: 'IPS · PASSED',   verdict: 'NOT blocked', note: 'no reset and no reply — the frame most likely reached the PLC, which is waiting for the bytes we promised.'},
-  refused:  {blocked: false, fw: 'IPS · REFUSED',   verdict: 'Refused', note: 'the target refused the TCP connection — nothing to test against on this port.'},
-  error:    {blocked: false, fw: 'IPS · ERROR',     verdict: 'Error', note: 'could not complete the probe.'},
+  dropped:     {blocked: true,  fw: 'IPS · DROPPED', verdict: 'Blocked', note: 'the valid baseline request was answered, but the malformed frame got no reply — silently dropped in transit, which a reachable PLC would not do. This is what a FortiGate IPS drop looks like.'},
+  reset:       {blocked: true,  fw: 'IPS · DROPPED', verdict: 'Blocked', note: 'the baseline was answered, but the malformed frame reset the connection — consistent with the FortiGate IPS dropping it.'},
+  closed:      {blocked: true,  fw: 'IPS · DROPPED', verdict: 'Blocked', note: 'the baseline was answered, but the malformed frame closed the connection with no reply — consistent with the FortiGate IPS dropping it.'},
+  passed:      {blocked: false, fw: 'IPS · PASSED',  verdict: 'NOT blocked', note: 'the PLC answered the malformed frame too, so it was not blocked in transit.'},
+  unreachable: {blocked: false, fw: 'IPS · NO TEST', verdict: 'Can\'t test', note: 'the valid baseline request itself got no answer — the PLC is unreachable, the target is wrong, or even benign Modbus is blocked. Fix the connection, then retry.', amber: true},
+  refused:     {blocked: false, fw: 'IPS · REFUSED', verdict: 'Refused', note: 'the target refused the TCP connection — nothing to test against on this port.', amber: true},
+  error:       {blocked: false, fw: 'IPS · ERROR',   verdict: 'Error', note: 'could not complete the probe.', amber: true},
 };
 
 let attackTimer = null;

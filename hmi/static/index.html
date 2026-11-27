@@ -338,7 +338,7 @@
           </g>
           <text class="t" x="622" y="86">Rogue client</text><text class="tag" x="778" y="86" text-anchor="end">10.10.2.66</text>
           <text class="v" x="622" y="104">Modbus FC03 → PLC</text>
-          <text class="v" x="622" y="119">MBAP len 253 · PDU 5 B</text>
+          <text class="v" x="622" y="119">MBAP len 6 · +2 trailing B</text>
         </g>
         <circle id="atk-pkt" r="5" fill="#ff4d6d" filter="drop-shadow(0 0 6px #ff4d6d)" opacity="0">
           <animateMotion id="atk-motion" dur="1.1s" begin="indefinite" fill="freeze"><mpath href="#atk-path"/></animateMotion>
@@ -553,7 +553,7 @@ async function simulateAttack() {
     $('v-fw').textContent = view.fw;
     const resp = res.response_hex ? ` · reply ${res.response_hex}` : '';
     $('ips-toast').className = 'show ' + (view.blocked ? 'ok' : 'warn');
-    $('ips-toast').innerHTML = `${view.blocked ? '🛡️' : '⚠️'} <span><b>${view.verdict}: ${res.signature}</b> · sent ${res.sent_bytes} B (MBAP len ${res.claimed_len}, real ${res.actual_len}) → ${res.target} · ${res.outcome} in ${res.elapsed_ms} ms${resp}. ${view.note}</span>`;
+    $('ips-toast').innerHTML = `${view.blocked ? '🛡️' : '⚠️'} <span><b>${view.verdict}: ${res.signature}</b> · sent ${res.sent_bytes} B (MBAP len ${res.declared_len}, ${res.actual_after_len} follow, +${res.trailing_bytes} trailing) → ${res.target} · ${res.outcome} in ${res.elapsed_ms} ms${resp}. ${view.note}</span>`;
     refresh();
     attackTimer = setTimeout(() => {
       $('atk').style.display = 'none';

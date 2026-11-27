@@ -31,9 +31,20 @@ shows a FortiGate firewall (FW-01) on the HMI to PLC link, for a PLC reached acr
 For a security test, the **Send malformed packet** button in the diagram header (shown only
 while the FortiGate is in the path) sends a **real** malformed Modbus/TCP frame to the current
 PLC target so you can check whether an in-path IPS blocks it. `POST /api/attack` opens a TCP
-connection to the target and writes one frame whose MBAP length field claims 253 bytes while
-only 6 follow — exactly what the FortiGate signature `Modbus.TCP.Invalid.Packet.Length`
-detects. It is a single probe, meant for a lab you own. The HMI reports the outcome:
+connection to the target and writes one frame — `00 01 00 00 00 06 01 03 00 00 00 01 de ad` —
+whose MBAP length field declares 6 bytes but leaves 2 extra trailing bytes beyond that point.
+It is a single probe, meant for a lab you own.
+
+The frame is shaped to trip this custom FortiGate IPS signature (service MODBUS):
+
+```
+--pattern "|00 00|"; --context body; --distance 2,context; --within 2,context;
+--byte_jump 2,0,relative; --data_at 0,relative
+```
+
+The `00 00` protocol-id sits at body offset 2 (`--distance 2 --within 2`); `--byte_jump`
+advances by the declared length field, and `--data_at 0,relative` then finds the 2 trailing
+bytes that a conforming frame would not have. The HMI reports the outcome:
 
 | Outcome | Meaning |
 |---|---|

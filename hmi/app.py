@@ -134,20 +134,28 @@ async def set_plc(body: Target):
 SIGNATURE = "Modbus.TCP.Invalid.Packet.Length"
 
 
-# A deliberately malformed Modbus/TCP frame: the MBAP "length" field claims 253
-# bytes follow, but only the 6-byte unit+PDU below actually do. A conforming stack
-# never emits this; FortiGate's Modbus.TCP.Invalid.Packet.Length IPS signature is
-# meant to catch exactly this mismatch. Single probe, not a flood.
-BAD_MBAP_LENGTH = 253
+# A deliberately malformed Modbus/TCP frame: the MBAP "length" field under-counts
+# the bytes that actually follow, leaving trailing bytes past the declared end of
+# the message. A conforming stack never emits this. The frame is shaped to trip the
+# operator's custom FortiGate IPS signature (service MODBUS):
+#   pattern |00 00| ; context body ; distance 2 ; within 2 ;
+#   byte_jump 2,0,relative ; data_at 0,relative
+# i.e. protocol-id 00 00 at body offset 2, then jump by the declared length field
+# and require that data still remains there. Single probe, not a flood.
+DECLARED_LENGTH = 6            # MBAP length field value
 MALFORMED_FRAME = bytes([
     0x00, 0x01,              # transaction id
-    0x00, 0x00,              # protocol id (Modbus)
-    (BAD_MBAP_LENGTH >> 8) & 0xFF, BAD_MBAP_LENGTH & 0xFF,  # length: LIES (claims 253)
-    0x01,                    # unit id
-    0x03,                    # function: read holding registers
-    0x00, 0x00,              # start address 0
-    0x00, 0x01,              # quantity 1
-])  # real bytes after the length field: 6, not 253
+    0x00, 0x00,              # protocol id -> the |00 00| the signature matches at offset 2
+    (DECLARED_LENGTH >> 8) & 0xFF, DECLARED_LENGTH & 0xFF,  # length: claims 6 bytes follow
+    0x01,                    # unit id        \
+    0x03,                    # function code   | the 6 bytes the length field accounts for
+    0x00, 0x00,              # start address   |
+    0x00, 0x01,              # quantity       /
+    0xDE, 0xAD,              # trailing bytes PAST the declared length -> data_at matches here
+])
+# bytes after the length field: 8 actual vs 6 declared, so 2 bytes sit beyond the
+# point the length field claims the message ends.
+TRAILING_BYTES = len(MALFORMED_FRAME) - 6 - DECLARED_LENGTH
 ATTACK_TIMEOUT = 4.0
 
 
@@ -218,7 +226,7 @@ async def attack():
     })
     return {
         "signature": SIGNATURE, "target": f"{host}:{port}", "sent_bytes": len(MALFORMED_FRAME),
-        "frame_hex": MALFORMED_FRAME.hex(" "), "claimed_len": BAD_MBAP_LENGTH, "actual_len": 6,
+        "frame_hex": MALFORMED_FRAME.hex(" "), "declared_len": DECLARED_LENGTH, "actual_after_len": len(MALFORMED_FRAME) - 6, "trailing_bytes": TRAILING_BYTES,
         "outcome": outcome, "detail": detail, "blocked": blocked, "response_hex": resp_hex,
         "elapsed_ms": elapsed_ms, "blocked_count": ips_blocked,
     }

@@ -31,6 +31,8 @@ client = None  # created on first use, it needs the running event loop
 lock = asyncio.Lock()
 traffic = collections.deque(maxlen=50)
 seq = 0
+ips_blocked = 0  # simulated FortiGate IPS drops since the PLC target was set
+ips_log = collections.deque(maxlen=5)  # kept apart so polling traffic doesn't push them out
 
 
 def signed(value: int) -> int:
@@ -103,13 +105,13 @@ class Target(BaseModel):
 
 @app.get("/api/plc")
 async def get_plc():
-    return {**target, "default": DEFAULT_TARGET}
+    return {**target, "default": DEFAULT_TARGET, "ips_blocked": ips_blocked}
 
 
 @app.post("/api/plc")
 async def set_plc(body: Target):
     """Point the HMI at another PLC: drop the old connection and try the new one."""
-    global client
+    global client, ips_blocked
     host = body.host.strip()
     if not host or any(c.isspace() for c in host) or "/" in host:
         raise HTTPException(400, "host must be a hostname or IP address, without a scheme or path")
@@ -124,12 +126,38 @@ async def set_plc(body: Target):
         client = AsyncModbusTcpClient(host, port=body.port, timeout=1)
         connected = await client.connect()
         traffic.clear()
+        ips_log.clear()
+        ips_blocked = 0
     return {**target, "connected": bool(connected)}
+
+
+SIGNATURE = "Modbus.TCP.Invalid.Packet.Length"
+
+
+@app.post("/api/attack")
+async def attack():
+    """Demo only: record a malformed Modbus/TCP request dropped by the FortiGate IPS.
+
+    Nothing is sent on the wire. The FortiGate sits between the HMI and any
+    non-default PLC, so this logs what its IPS would show for a request whose
+    MBAP length field does not match the PDU it carries.
+    """
+    global seq, ips_blocked
+    if target == DEFAULT_TARGET:
+        raise HTTPException(409, "No FortiGate in the path: point the HMI at a non-default PLC first")
+    ips_blocked += 1
+    seq += 1
+    ips_log.appendleft({
+        "seq": seq, "time": time.strftime("%H:%M:%S"), "fc": 3, "name": SIGNATURE,
+        "address": 0, "count": 1, "values": [], "blocked": True,
+        "detail": "MBAP length 253, PDU 5 bytes · dropped by FW-01",
+    })
+    return {"signature": SIGNATURE, "blocked": ips_blocked, "target": f"{target['host']}:{target['port']}"}
 
 
 @app.get("/api/traffic")
 async def get_traffic():
-    return list(traffic)
+    return list(ips_log) + list(traffic)
 
 
 class Write(BaseModel):

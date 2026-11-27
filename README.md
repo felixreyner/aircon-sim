@@ -28,6 +28,13 @@ The change applies to every browser using that HMI and lasts until the HMI resta
 While the HMI points at a PLC other than the default, the system architecture diagram
 shows a FortiGate firewall (FW-01) on the HMI to PLC link, for a PLC reached across the site firewall.
 
+For a security demo, the **Simulate attack** button in the diagram header (shown only while
+the FortiGate is in the path) plays a rogue client sending a Modbus/TCP request whose MBAP
+length field does not match its PDU. The FortiGate IPS signature
+`Modbus.TCP.Invalid.Packet.Length` drops it: FW-01 flashes red, a red IPS row is pinned to the
+top of the traffic log, and the PLC keeps running. Nothing malformed is actually sent; the HMI
+records the event through `POST /api/attack`.
+
 The same thing is available over HTTP: `GET /api/plc` returns the current target and
 `POST /api/plc` with `{"host": "...", "port": 502, "unit": 1}` switches to a new one.
 

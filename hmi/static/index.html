@@ -207,6 +207,34 @@
   .topo .pkt.on { opacity: 1; }
   .topo .led { transition: fill .3s; }
   #plc-run.on { animation: pulse 1s infinite; }
+  .atk {
+    margin-left: auto; margin-right: 12px; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+    font: 600 11px Inter, system-ui, sans-serif; letter-spacing: .04em; text-transform: none;
+    color: #ffb3c0; background: rgba(255, 77, 109, .12); border: 1px solid rgba(255, 77, 109, .5); transition: .2s;
+  }
+  .atk:hover { background: rgba(255, 77, 109, .22); box-shadow: 0 0 16px rgba(255, 77, 109, .35); }
+  .atk:disabled { opacity: .5; cursor: wait; }
+  .atk[hidden] { display: none; }
+  .topo { position: relative; }
+  .topo .node.atkr rect.box { stroke: rgba(255, 77, 109, .8); stroke-dasharray: 5 4; }
+  .topo .node.atkr .icon { stroke: #ff4d6d; }
+  .topo .node.atkr .v { fill: #ffb3c0; }
+  .topo .node.blocked rect.box { stroke: #ff4d6d; fill: #3a1828; animation: fwflash .35s 4; }
+  .topo .node.passed rect.box { stroke: var(--warn); fill: #3a2d14; }
+  .topo .node.passed .v { fill: #ffd591; }
+  @keyframes fwflash { 50% { fill: #6e2236; } }
+  #atk-path { fill: none; stroke: rgba(255, 77, 109, .6); stroke-width: 2; stroke-dasharray: 4 5; animation: dash 1s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -18; } }
+  #ips-toast {
+    position: absolute; left: 20px; right: 20px; bottom: 16px; display: flex; gap: 10px; align-items: center;
+    padding: 10px 14px; border-radius: 12px; font: 12px var(--mono); color: #ffd5dc;
+    background: linear-gradient(90deg, rgba(255,77,109,.3), rgba(255,77,109,.1)); border: 1px solid rgba(255, 77, 109, .55);
+    opacity: 0; transform: translateY(8px); transition: .3s; pointer-events: none;
+  }
+  #ips-toast.show { opacity: 1; transform: none; }
+  #ips-toast.ok { background: linear-gradient(90deg, rgba(60,240,160,.28), rgba(60,240,160,.08)); border-color: rgba(60,240,160,.5); color: #d5ffe9; }
+  #ips-toast.warn { background: linear-gradient(90deg, rgba(255,181,71,.3), rgba(255,181,71,.1)); border-color: rgba(255,181,71,.55); color: #ffe6bf; }
+  #ips-toast b { color: #fff; }
   #ac-fan { transform-box: fill-box; transform-origin: center; animation: spin linear infinite; animation-duration: 0s; }
 
   /* ---------- trend ---------- */
@@ -225,6 +253,13 @@
   td.fc span { padding: 1px 6px; border-radius: 6px; background: rgba(77, 124, 255, .18); color: #9fb6ff; }
   td.fc.w span { background: rgba(255, 181, 71, .18); color: var(--warn); }
   td.v { color: var(--ok); }
+  tr.drop { background: rgba(255, 77, 109, .08) !important; }
+  tr.drop td { color: #ffb3c0; }
+  td.fc.ips span { background: rgba(255, 77, 109, .22); color: var(--bad); }
+  tr.drop td.v { color: var(--bad); }
+  tr.pass { background: rgba(255, 181, 71, .08) !important; }
+  tr.pass td { color: #ffd591; }
+  tr.pass td.fc.ips span { background: rgba(255, 181, 71, .22); color: var(--warn); }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 4px; }
 </style>
@@ -262,7 +297,9 @@
   <div id="banner" class="wide"></div>
 
   <section class="card topo">
-    <h2>System architecture <span id="topo-label">--</span></h2>
+    <h2>System architecture
+      <button class="atk" id="attack-btn" hidden title="Send one real malformed Modbus/TCP packet to the current PLC and report whether the FortiGate IPS blocks it">⚡ Send malformed packet</button>
+      <span id="topo-label">--</span></h2>
     <div class="topo-scroll">
     <svg viewBox="0 0 820 480" role="img" aria-label="OT architecture: HMI, PLC, temperature control loop, temperature transmitter and AC unit inside the building">
       <!-- Purdue levels -->
@@ -290,6 +327,24 @@
       <circle class="pkt p-tt" r="3.5" fill="#3cf0a0"><animateMotion dur="1.2s" begin="0s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#l-tt"/></animateMotion></circle>
       <circle class="pkt p-tic" r="3.5" fill="#9a6bff"><animateMotion dur="1.4s" begin="0s" repeatCount="indefinite" ><mpath href="#l-tic"/></animateMotion></circle>
       <circle class="pkt p-ac" r="3.5" fill="#3be8ff"><animateMotion dur="1s" begin="0s" repeatCount="indefinite" ><mpath href="#l-ac"/></animateMotion></circle>
+
+      <!-- simulated attacker, shown only while the attack demo runs -->
+      <g id="atk" style="display:none">
+        <path id="atk-path" d="M560 100 H500 V163 H420"/>
+        <g class="node atkr">
+          <rect class="box" x="560" y="64" width="230" height="72" rx="12"/>
+          <g transform="translate(572 80)">
+            <rect class="icon" x="4" y="2" width="32" height="22" rx="2"/><path class="icon" d="M0 30h40M14 10l4 4-4 4M21 18h6"/>
+          </g>
+          <text class="t" x="622" y="86">Rogue client</text><text class="tag" x="778" y="86" text-anchor="end">10.10.2.66</text>
+          <text class="v" x="622" y="104">Modbus FC03 → PLC</text>
+          <text class="v" x="622" y="119">MBAP len 253 · PDU 5 B</text>
+        </g>
+        <circle id="atk-pkt" r="5" fill="#ff4d6d" filter="drop-shadow(0 0 6px #ff4d6d)" opacity="0">
+          <animateMotion id="atk-motion" dur="1.1s" begin="indefinite" fill="freeze"><mpath href="#atk-path"/></animateMotion>
+        </circle>
+        <g id="atk-x" opacity="0" stroke="#ff4d6d" stroke-width="3" stroke-linecap="round"><path d="M424 156l12 12M436 156l-12 12"/></g>
+      </g>
 
       <!-- firewall on the HMI to PLC conduit, shown when the HMI points at a non-default PLC -->
       <g class="node" id="n-fw" style="display:none">
@@ -333,6 +388,7 @@
       </g>
     </svg>
     </div>
+    <div id="ips-toast" role="status"></div>
   </section>
   <section class="card">
     <h2>Room climate <span id="mode-label">--</span></h2>
@@ -454,9 +510,67 @@ function setLinkState(id, cls, pktCls, on) {
 function setFirewall(online) {
   const d = plc && plc.default, show = !!d && (plc.host !== d.host || plc.port !== d.port || plc.unit !== d.unit);
   $('n-fw').style.display = show ? '' : 'none';
-  if (show) { setNode('n-fw', online ? 'ok' : 'bad'); $('v-fw').textContent = online ? `allow ${plc.port}/tcp` : 'no reply'; }
+  if (show && !$('n-fw').classList.contains('blocked')) {
+    setNode('n-fw', online ? 'ok' : 'bad'); $('v-fw').textContent = online ? `allow ${plc.port}/tcp` : 'no reply';
+  }
   $('lbl-hmi').setAttribute('x', show ? 430 : 355);
+  $('attack-btn').hidden = !show;
 }
+
+// Real IPS probe: send one malformed Modbus/TCP frame to the current PLC and show
+// whether an in-path FortiGate drops it. How each real outcome reads on the page.
+const ATTACK_VIEW = {
+  reset:    {blocked: true,  fw: 'IPS · DROPPED',   verdict: 'Blocked', note: 'connection reset right after the frame — consistent with the FortiGate IPS dropping it.'},
+  closed:   {blocked: true,  fw: 'IPS · DROPPED',   verdict: 'Blocked', note: 'peer closed the connection with no reply — consistent with the FortiGate IPS dropping it.'},
+  timeout:  {blocked: true,  fw: 'IPS · NO ROUTE',  verdict: 'No connection', note: 'could not even open a TCP connection — the packet may be silently dropped upstream.'},
+  answered: {blocked: false, fw: 'IPS · PASSED',    verdict: 'NOT blocked', note: 'the PLC answered, so the malformed frame was not blocked in transit.'},
+  'no-reply':{blocked: false, fw: 'IPS · PASSED',   verdict: 'NOT blocked', note: 'no reset and no reply — the frame most likely reached the PLC, which is waiting for the bytes we promised.'},
+  refused:  {blocked: false, fw: 'IPS · REFUSED',   verdict: 'Refused', note: 'the target refused the TCP connection — nothing to test against on this port.'},
+  error:    {blocked: false, fw: 'IPS · ERROR',     verdict: 'Error', note: 'could not complete the probe.'},
+};
+
+let attackTimer = null;
+async function simulateAttack() {
+  const btn = $('attack-btn');
+  btn.disabled = true;
+  btn.textContent = '⚡ Sending…';
+  try {
+    const r = await fetch('/api/attack', {method: 'POST'});
+    const res = await r.json();
+    if (!r.ok) throw new Error(res.detail || 'attack request failed');
+    const view = ATTACK_VIEW[res.outcome] || ATTACK_VIEW.error;
+    clearTimeout(attackTimer);
+    // play the packet travelling to the firewall
+    $('atk').style.display = '';
+    $('atk-x').setAttribute('opacity', 0);
+    $('atk-pkt').setAttribute('opacity', 1);
+    $('atk-motion').beginElement();
+    await new Promise(done => setTimeout(done, 1100));
+    $('atk-pkt').setAttribute('opacity', view.blocked ? 0 : 1);
+    $('atk-x').setAttribute('opacity', view.blocked ? 1 : 0);
+    $('n-fw').classList.toggle('blocked', view.blocked);
+    $('n-fw').classList.toggle('passed', !view.blocked);
+    $('v-fw').textContent = view.fw;
+    const resp = res.response_hex ? ` · reply ${res.response_hex}` : '';
+    $('ips-toast').className = 'show ' + (view.blocked ? 'ok' : 'warn');
+    $('ips-toast').innerHTML = `${view.blocked ? '🛡️' : '⚠️'} <span><b>${view.verdict}: ${res.signature}</b> · sent ${res.sent_bytes} B (MBAP len ${res.claimed_len}, real ${res.actual_len}) → ${res.target} · ${res.outcome} in ${res.elapsed_ms} ms${resp}. ${view.note}</span>`;
+    refresh();
+    attackTimer = setTimeout(() => {
+      $('atk').style.display = 'none';
+      $('n-fw').classList.remove('blocked', 'passed');
+      $('ips-toast').className = '';
+      if (plc) $('v-fw').textContent = `allow ${plc.port}/tcp`;
+    }, 7000);
+  } catch (err) {
+    $('ips-toast').className = 'show warn';
+    $('ips-toast').textContent = err.message;
+    attackTimer = setTimeout(() => $('ips-toast').className = '', 4000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⚡ Send malformed packet';
+  }
+}
+$('attack-btn').onclick = simulateAttack;
 
 function renderTopo(s) {
   const fan = ['', 'low', 'med', 'high'][s.fan] || s.fan, sens = !s.sensor_fault;
@@ -626,7 +740,9 @@ async function refresh() {
   }
   const t = await fetch('/api/traffic').then(r => r.json()).catch(() => []);
   $('traffic-count').textContent = t.length ? `latest ${t.length} requests` : '';
-  $('traffic').innerHTML = t.map(m => `<tr><td>${m.seq}</td><td>${m.time}</td>
+  $('traffic').innerHTML = t.map(m => (m.blocked || m.live) ? `<tr class="${m.blocked ? 'drop' : 'pass'}"><td>${m.seq}</td><td>${m.time}</td>
+    <td class="fc ips"><span>IPS</span></td><td>${m.name}</td><td>${m.address}</td><td>${m.count}</td>
+    <td class="v">${m.blocked ? 'BLOCKED' : 'PASSED'} · ${m.detail}</td></tr>` : `<tr><td>${m.seq}</td><td>${m.time}</td>
     <td class="fc ${m.fc > 4 ? 'w' : ''}"><span>FC${String(m.fc).padStart(2, '0')}</span></td><td>${m.name}</td>
     <td>${m.address}</td><td>${m.count}</td><td class="v">[${m.values.join(', ')}]</td></tr>`).join('');
 }

@@ -28,6 +28,25 @@ The change applies to every browser using that HMI and lasts until the HMI resta
 While the HMI points at a PLC other than the default, the system architecture diagram
 shows a FortiGate firewall (FW-01) on the HMI to PLC link, for a PLC reached across the site firewall.
 
+For a security test, the **Send malformed packet** button in the diagram header (shown only
+while the FortiGate is in the path) sends a **real** malformed Modbus/TCP frame to the current
+PLC target so you can check whether an in-path IPS blocks it. `POST /api/attack` opens a TCP
+connection to the target and writes one frame whose MBAP length field claims 253 bytes while
+only 6 follow — exactly what the FortiGate signature `Modbus.TCP.Invalid.Packet.Length`
+detects. It is a single probe, meant for a lab you own. The HMI reports the outcome:
+
+| Outcome | Meaning |
+|---|---|
+| `reset` / `closed` | the connection was reset or closed right after the frame — consistent with an IPS drop (shown as **Blocked**) |
+| `timeout` | could not open a TCP connection at all — possibly dropped upstream |
+| `answered` | the PLC replied — the frame was **not** blocked in transit |
+| `no-reply` | connected, no reset and no reply before the timeout — the frame most likely reached the PLC (**not blocked**) |
+| `refused` | the target refused the TCP connection |
+
+When the firewall drops it, FW-01 flashes red and a red `IPS` row is pinned to the top of the
+traffic log; when it gets through, the row and the firewall are shown amber. The latest 5 probe
+results are kept, and they reset when the PLC target changes.
+
 The same thing is available over HTTP: `GET /api/plc` returns the current target and
 `POST /api/plc` with `{"host": "...", "port": 502, "unit": 1}` switches to a new one.
 
